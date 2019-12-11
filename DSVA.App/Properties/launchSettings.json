@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "DSVA.App": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}

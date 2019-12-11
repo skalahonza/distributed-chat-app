@@ -1,0 +1,19 @@
+version: '3.4'
+
+services:
+  dsva.app_1:
+    # image: ${DOCKER_REGISTRY-}dsvaapp
+    stdin_open: true
+    build:
+      context: .
+      dockerfile: DSVA.App/Dockerfile    
+  dsva.app_2:
+    # image: ${DOCKER_REGISTRY-}dsvaapp
+    build:
+      context: .
+      dockerfile: DSVA.App/Dockerfile
+  dsva.app_3:
+    # image: ${DOCKER_REGISTRY-}dsvaapp
+    build:
+      context: .
+      dockerfile: DSVA.App/Dockerfile
