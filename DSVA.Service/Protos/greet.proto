@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+option csharp_namespace = "DSVA.Service";
+
+package chat;
+
+service Chat{
+    rpc SendMessage (ChatMessage) returns (Status);
+    rpc SignOut (Disconnect) returns (Status);
+}
+
+message Status{
+    bool ok = 1;
+    string reason = 2;
+}
+
+message ChatMessage{
+    repeated int64 clock = 1;
+    string from = 2;
+    string to = 3;
+    string content = 4;
+}
+
+message ChatMessageClient{
+    string from = 2;
+    string to = 3;
+    string content = 4;
+}
+
+message Disconnect {
+    string node = 1;
+}
