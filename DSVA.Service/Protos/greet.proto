@@ -6,27 +6,75 @@ package chat;
 
 service Chat{
     rpc SendMessage (ChatMessage) returns (Status);
+    rpc StartElection (Election) returns (Status);
+    rpc WonElection (Elected) returns (Status);
     rpc SignOut (Disconnect) returns (Status);
 }
 
-message Status{
-    bool ok = 1;
-    string reason = 2;
+// Common message header
+message Header{
+    repeated int64 clock = 1;
+    string id = 2;
+    int32 leader = 3;
 }
 
+// Common message response
+message Status{
+    bool ok = 1;
+    string reason = 2;    
+}
+
+// Start election
+message Election{
+    Header header = 1;
+     int32 node = 2;
+}
+
+// Won election
+message Elected{
+    Header header = 1;
+     int32 node = 2;
+}
+
+// Send chat message to a ring
 message ChatMessage{
-    repeated int64 clock = 1;
-    string from = 2;
-    string to = 3;
+    Header header = 1;
+    int32 from = 2;
+    int32 to = 3;
     string content = 4;
 }
 
+// Chat message received, record it to every node
+message RecordMessage{
+    Header header = 1;
+    int32 from = 2;
+    int32 to = 3;
+    string content = 4;
+}
+
+// send chat message, only for WPF client
 message ChatMessageClient{
     string from = 2;
     string to = 3;
     string content = 4;
 }
 
+// node gracefuly disconnected
 message Disconnect {
-    string node = 1;
+    Header header = 1;
+    int32 node = 2;
+}
+
+// node gracefully connected
+message Connect {
+    Header header = 1;
+    int32 node = 2;
+    string _nextAddr = 3;
+    string _nextNextAddr = 4;
+}
+
+// droped node detected
+message Dropped {
+    Header header = 1;
+    int32 node = 2;
 }
