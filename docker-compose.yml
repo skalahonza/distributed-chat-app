@@ -1,19 +1,33 @@
 version: '3.4'
 
 services:
-  dsva.app_1:
-    # image: ${DOCKER_REGISTRY-}dsvaapp
-    stdin_open: true
+  dsva.service_1:
+    # image: ${DOCKER_REGISTRY-}dsvaservice
+    environment:
+      - Node__next="http://dsva.service_2:5003"
+      - Node__nextNext="http://dsva.service_3:5004"
+      - Node__neighboursCount=3
+      - Node__id=0
     build:
       context: .
-      dockerfile: DSVA.App/Dockerfile    
-  dsva.app_2:
-    # image: ${DOCKER_REGISTRY-}dsvaapp
+      dockerfile: DSVA.Service/Dockerfile
+  dsva.service_2:
+    # image: ${DOCKER_REGISTRY-}dsvaservice
+    environment:
+      - Node__next="http://dsva.service_3:5004"
+      - Node__nextNext="http://dsva.service_1:5002"
+      - Node__neighboursCount=3
+      - Node__id=1
     build:
       context: .
-      dockerfile: DSVA.App/Dockerfile
-  dsva.app_3:
-    # image: ${DOCKER_REGISTRY-}dsvaapp
+      dockerfile: DSVA.Service/Dockerfile
+  dsva.service_3:
+    # image: ${DOCKER_REGISTRY-}dsvaservice
+    environment:
+      - Node__next="http://dsva.service_1:5002"
+      - Node__nextNext="http://dsva.service_2:5003"
+      - Node__neighboursCount=3
+      - Node__id=2
     build:
       context: .
-      dockerfile: DSVA.App/Dockerfile
+      dockerfile: DSVA.Service/Dockerfile

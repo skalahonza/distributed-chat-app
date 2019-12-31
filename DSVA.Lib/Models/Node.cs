@@ -8,6 +8,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using static DSVA.Service.Chat;
 
 namespace DSVA.Lib.Models
@@ -29,16 +30,24 @@ namespace DSVA.Lib.Models
         private readonly ISet<string> _messages = new HashSet<string>();
 
         public Node(IOptions<NodeOptions> options, ILogger<Node> log)
-            : this(options.Value.Next, options.Value.NextNext, options.Value.NeighboursCount, options.Value.Id) => _log = log;
-
-        private Node(string next, string nextNext, int neighbours, int id)
+            : this(options.Value.Next, options.Value.NextNext, options.Value.NeighboursCount, options.Value.Id, log)
         {
+            log.LogInformation($"Initializing node with: {options.Value}");
+        }
+
+        private Node(string next, string nextNext, int neighbours, int id, ILogger log)
+        {
+            _log = log;
             _id = id;
             _neighbours = neighbours;
             _clock = new ConcurrentDictionary<int, long>(Enumerable.Range(0, neighbours).ToDictionary(x => x, _ => (long)0));
             (_nextAddr, _nextNextAddr) = (next, nextNext);
-            _next = new ChatClient(GrpcChannel.ForAddress(next));
-            _nextNext = new ChatClient(GrpcChannel.ForAddress(nextNext));
+            if (!string.IsNullOrEmpty(next))
+                _next = new ChatClient(GrpcChannel.ForAddress(next));
+            if (!string.IsNullOrEmpty(nextNext))
+                _nextNext = new ChatClient(GrpcChannel.ForAddress(nextNext));
+            Task.Delay(TimeSpan.FromSeconds(5)).Wait();
+            InitElection();
         }
 
         private bool IsLeader() => (leaderId ?? -1) == _id;
@@ -70,10 +79,10 @@ namespace DSVA.Lib.Models
         /// <returns>true if duplicate message detected</returns>
         private bool ProcessHeader<T>(Header header, T message)
         {
-            _log.LogMessage(_clock, $"Message {typeof(T).Name} with id: {header.Id} received.");
+            _log.LogMessage(_clock, _id, $"Message {typeof(T).Name} with id: {header.Id} received.");
             if (!_messages.Add(header.Id))
             {
-                _log.LogWarn(_clock, $"Message {typeof(T).Name} with id: {header.Id} is duplicate, skipping.");
+                _log.LogWarn(_clock, _id, $"Message {typeof(T).Name} with id: {header.Id} is duplicate, skipping.");
                 return true;
             }
 
@@ -103,7 +112,7 @@ namespace DSVA.Lib.Models
             }
             catch (RpcException e)
             {
-                _log.LogException(_clock, e, $"Failed sending to {_nextAddr}.");
+                _log.LogException(_clock, _id, e, $"Failed sending to {_nextAddr}.");
                 OnFailure(e);
                 if (passThrough)
                     pass(_nextNext);
@@ -115,8 +124,10 @@ namespace DSVA.Lib.Models
         /// </summary>
         private void InitElection()
         {
-            if (_neighbours == 0)
+            _log.LogMessage(_clock, _id, "Initializing election.");
+            if (_neighbours == 1)
             {
+                _log.LogWarn(_clock, _id, "I am alone, winning election instantly.");
                 leaderId = _id;
                 return;
             }
@@ -133,10 +144,10 @@ namespace DSVA.Lib.Models
         public void Act(Election message)
         {
             // Every time a process sends or forwards an election message, the process also marks itself as a participant.
-            ProcessHeader(message.Header, message);
+            if (ProcessHeader(message.Header, message)) return;
 
-            //If the UID in the election message is larger, the process unconditionally forwards the election message in a clockwise direction.
-            if (message.Node > _id)
+            //If the UID in the election message is smaller, the process unconditionally forwards the election message in a clockwise direction.
+            if (message.Node < _id)
             {
                 isParticipant = true;
                 var e = new Election
@@ -147,8 +158,8 @@ namespace DSVA.Lib.Models
                 PassMessage(node => node.StartElection(e));
             }
 
-            //If the UID in the election message is smaller
-            if (message.Node < _id)
+            //If the UID in the election message is larger
+            if (message.Node > _id)
             {
                 //and the process is not yet a participant, the process replaces the UID in the message with its own UID, sends the updated election message in a clockwise direction.
                 if (!isParticipant)
@@ -161,7 +172,9 @@ namespace DSVA.Lib.Models
                     };
                     PassMessage(node => node.StartElection(e));
                 }
-                //If the UID in the election message is smaller, and the process is already a participant (i.e., the process has already sent out an election message with a UID at least as large as its own UID), the process discards the election message.
+                //If the UID in the election message is larger, and the process is already a participant 
+                //(i.e., the process has already sent out an election message with a UID at least as large as its own UID), 
+                //the process discards the election message.
             }
 
             if (message.Node == _id)
@@ -181,19 +194,19 @@ namespace DSVA.Lib.Models
 
         public void Act(Elected message)
         {
-            ProcessHeader(message.Header, message);
+            if (ProcessHeader(message.Header, message)) return;
             //When a process receives an elected message, it marks itself as non-participant, records the elected UID, and forwards the elected message unchanged.
             if (message.Node != _id)
             {
                 isParticipant = false;
                 leaderId = message.Node;
+                //When the elected message reaches the newly elected leader, the leader discards that message, and the election is over.
+                PassMessage(node => node.WonElection(new Elected
+                {
+                    Header = CreateHeader(),
+                    Node = message.Node
+                }));
             }
-            //When the elected message reaches the newly elected leader, the leader discards that message, and the election is over.
-            PassMessage(node => node.WonElection(new Elected
-            {
-                Header = CreateHeader(),
-                Node = message.Node
-            }));
         }
 
         public void Act(ChatMessage message)
@@ -226,9 +239,28 @@ namespace DSVA.Lib.Models
 
         }
 
-        public void Act(Connect connect)
+        public void Act(Connect node)
         {
+            if (ProcessHeader(node.Header, node)) return;
+            _neighbours++;
+            if(_next == null)
+            {
+                _nextAddr = node.Addr;
+                _next = new ChatClient(GrpcChannel.ForAddress(node.Addr));
+            }
+            if(_nextNext == null && node.NextId != _id)
+            {
+                _nextNextAddr = node.NextAddr;
+                _nextNext = new ChatClient(GrpcChannel.ForAddress(node.NextAddr));
+            }
+            if(node.NextAddr == _nextAddr)
+            {
+                _nextNextAddr = _nextAddr;
+                _nextNext = new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
 
+                _nextAddr = node.Addr;
+                _next = new ChatClient(GrpcChannel.ForAddress(_nextAddr));
+            }
         }
     }
 }

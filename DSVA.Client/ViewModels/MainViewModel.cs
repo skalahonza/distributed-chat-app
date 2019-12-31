@@ -5,6 +5,7 @@ using Grpc.Net.Client;
 using PropertyChanged;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Windows;
 using static DSVA.Service.Chat;
 
 namespace DSVA.Client.ViewModels
@@ -19,11 +20,18 @@ namespace DSVA.Client.ViewModels
         public string Message { get; set; }
 
         public RelayCommand SendMessageCommand => new RelayCommand(_ =>
-       {           
-           var response = _client.SendMessage(new ChatMessage
+       {
+           try
            {
-               Content = Message,
-           });           
+               var response = _client.SendMessage(new ChatMessage
+               {
+                   Content = Message,
+               });
+           }
+           catch (System.Exception ex)
+           {
+               MessageBox.Show(ex.Message);
+           }
            Messages.Add(new Message { Content = Message, IsFromMe = true });
            Message = "";
        });
