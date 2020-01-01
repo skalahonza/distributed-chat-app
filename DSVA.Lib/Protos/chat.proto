@@ -6,17 +6,28 @@ package chat;
 
 service Chat{
     rpc SendMessage (ChatMessage) returns (Status);
+    rpc HeartBeat (Beat) returns (Status);
+    rpc HeartBeatRequest (Empty) returns (Status);
     rpc StartElection (Election) returns (Status);
     rpc WonElection (Elected) returns (Status);
     rpc Connected (Connect) returns (Status);
     rpc SignOut (Disconnect) returns (Status);
+    rpc Drop (Dropped) returns (Status);
 }
+
+message Empty{}
 
 // Common message header
 message Header{
     repeated int64 clock = 1;
     string id = 2;
     int32 leader = 3;
+}
+
+// Heartbeat message for testing 
+message Beat{
+    Header header = 1;
+    int32 node = 2;
 }
 
 // Common message response
@@ -64,6 +75,8 @@ message ChatMessageClient{
 message Disconnect {
     Header header = 1;
     int32 node = 2;
+    string addr = 3;
+    string _nextAddr = 4;
 }
 
 // node gracefully connected
@@ -81,4 +94,6 @@ message Connect {
 message Dropped {
     Header header = 1;
     int32 node = 2;
+    string addr = 3;
+    string _nextAddr = 4;
 }

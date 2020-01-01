@@ -18,6 +18,7 @@ namespace DSVA.Lib.Models
         private ILogger _log;
         private readonly int _id;
         private int? leaderId;
+
         //Initially each process in the ring is marked as non-participant.
         private bool isParticipant;
 
@@ -39,7 +40,7 @@ namespace DSVA.Lib.Models
         {
             _options = options;
             _log = log;
-            _id = options.Id;            
+            _id = options.Id;
             _clock = new ConcurrentDictionary<int, long>(Enumerable.Range(0, _id + 1).ToDictionary(x => x, _ => (long)0));
             (_nextAddr, _nextNextAddr) = (options.Next, options.NextNext);
             if (!string.IsNullOrEmpty(options.Next))
@@ -224,6 +225,21 @@ namespace DSVA.Lib.Models
             }
         }
 
+        public void HeartBeat()
+        {
+            PassMessage(node => node.HeartBeat(new Beat
+            {
+                Header = CreateHeader(),
+                Node = _id
+            }));
+        }
+
+        public void Act(Beat message)
+        {
+            if (ProcessHeader(message.Header, message)) return;
+            PassMessage(node => node.HeartBeat(message));
+        }
+
         public void Act(ChatMessage message)
         {
             // update clock - common message body
@@ -239,6 +255,21 @@ namespace DSVA.Lib.Models
             }
         }
 
+        private bool HandleDisonnected(string addr, string next)
+        {
+            // Node behind me disconnected
+            if (addr == _nextAddr)
+            {
+                _nextAddr = _nextNextAddr;
+                _next = _nextNext;
+
+                _nextNextAddr = next;
+                _nextNext = string.IsNullOrEmpty(next) ? null : new ChatClient(GrpcChannel.ForAddress(next));
+                return true;
+            }
+            else return false;
+        }
+
         public void Act(RecordMessage message)
         {
 
@@ -246,12 +277,16 @@ namespace DSVA.Lib.Models
 
         public void Act(Disconnect message)
         {
-
+            if (ProcessHeader(message.Header, message)) return;
+            if (HandleDisonnected(message.Addr, message.NextAddr)) return;
+            PassMessage(node => node.SignOut(message));
         }
 
         public void Act(Dropped message)
         {
-
+            if (ProcessHeader(message.Header, message)) return;
+            if (HandleDisonnected(message.Addr, message.NextAddr)) return;
+            PassMessage(node => node.Drop(message));
         }
 
         public void Act(Connect node)
@@ -284,21 +319,8 @@ namespace DSVA.Lib.Models
                 _nextAddr = node.Addr;
                 _next = new ChatClient(GrpcChannel.ForAddress(_nextAddr));
             }
-            //if (_nextNext == null && node.NextId != _id)
-            //{
-            //    _nextNextAddr = node.NextAddr;
-            //    _nextNext = new ChatClient(GrpcChannel.ForAddress(node.NextAddr));
-            //}
-            //if (node.NextAddr == _nextAddr)
-            //{
-            //    _nextNextAddr = _nextAddr;
-            //    _nextNext = new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
-
-            //    _nextAddr = node.Addr;
-            //    _next = new ChatClient(GrpcChannel.ForAddress(_nextAddr));
-            //}
             PassMessage(x => x.Connected(node));
-            _log.LogWarn(_clock, _id, $"Next: {_nextAddr}, NextNext: {_nextNextAddr}");
+            _log.LogWarn(_clock, _id, $"Next: {_nextAddr}, NextNext: {_nextNextAddr}, Leader: {leaderId}");
         }
     }
 }

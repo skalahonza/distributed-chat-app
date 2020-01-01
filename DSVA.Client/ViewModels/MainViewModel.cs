@@ -27,19 +27,29 @@ namespace DSVA.Client.ViewModels
                {
                    Content = Message,
                });
+               Messages.Add(new Message { Content = Message, IsFromMe = true });
+               Message = "";
            }
            catch (System.Exception ex)
            {
                MessageBox.Show(ex.Message);
-           }
-           Messages.Add(new Message { Content = Message, IsFromMe = true });
-           Message = "";
+           }           
        });
 
         public RelayCommand ConnectCommand => new RelayCommand(_ =>
         {
             var channel = GrpcChannel.ForAddress(Service);
             _client = new ChatClient(channel);
+        });
+
+        public RelayCommand SignOutCommnad => new RelayCommand(_ =>
+        {
+            
+        });
+
+        public RelayCommand HeartBeatCommnad => new RelayCommand(_ =>
+        {
+            _client?.HeartBeatRequest(new Empty { });
         });
 
         public event PropertyChangedEventHandler PropertyChanged;
