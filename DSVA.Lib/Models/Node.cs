@@ -28,6 +28,8 @@ namespace DSVA.Lib.Models
         private string _nextNextAddr;
         private readonly ConcurrentDictionary<int, long> _clock;
         private readonly ISet<string> _messages = new HashSet<string>();
+
+        private readonly ConcurrentBag<JournalEntry> _journal = new ConcurrentBag<JournalEntry>();
         private readonly NodeOptions _options;
 
         public Node(IOptions<NodeOptions> options, ILogger<Node> log)
@@ -240,11 +242,98 @@ namespace DSVA.Lib.Models
             PassMessage(node => node.HeartBeat(message));
         }
 
+        public void SendMessage(string from, string to, string content)
+        {
+            Act(new ChatMessage
+            {
+                Header = CreateHeader(),
+                From = from,
+                To = to,
+                Content = content
+            });
+        }
+
         public void Act(ChatMessage message)
         {
-            // update clock - common message body
-            // leader - journal, send everyone, record message
-            // follower - send to next - leader died?, 
+            if (ProcessHeader(message.Header, message)) return;
+            if (IsLeader())
+            {
+                var entry = new JournalEntry(_clock, message.From, message.To, message.Content);
+                _journal.Add(entry);
+                PassMessage(node => node.AddJournal(new JournalMessage
+                {
+                    Header = CreateHeader(),
+                    Content = message.Content,
+                    From = message.From,
+                    Jid = entry.Id,
+                    To = message.To
+                }));
+            }
+            else
+            {
+                PassMessage(node => node.SendMessage(message));
+            }
+        }
+
+        public void Act(JournalMessage message)
+        {
+            if (ProcessHeader(message.Header, message)) return;
+            if (message.To == _options.Address)
+            {
+                PassMessage(node => node.ReceiveJournal(new JournalMessageReceived
+                {
+                    Header = CreateHeader(),
+                    Content = message.Content,
+                    From = message.From,
+                    To = message.To,
+                    Jid = message.Jid
+                }));
+            }
+            else
+            {
+                PassMessage(node => node.AddJournal(message));
+            }
+        }
+
+        public void Act(JournalMessageReceived message)
+        {
+            if (ProcessHeader(message.Header, message)) return;
+            if (IsLeader())
+            {
+                var entry = _journal.FirstOrDefault(x => x.Id == message.Jid);
+                if (entry == null)
+                {
+                    _log.LogError(_clock, _id, $"Journal entry with id {message.Jid} not found.");
+                }
+                else
+                {
+
+                    entry.IsConfirmed = true;
+                    PassMessage(node => node.ConfirmJournal(new JournalMessageConfirm
+                    {
+                        Header = CreateHeader(),
+                        Content = message.Content,
+                        From = message.From,
+                        To = message.To,
+                        Jid = message.Jid
+                    }));
+                }
+            }
+            else
+            {
+                PassMessage(node => node.ReceiveJournal(message));
+            }
+        }
+
+        public void Act(JournalMessageConfirm message)
+        {
+            if (ProcessHeader(message.Header, message)) return;
+            _journal.Add(new JournalEntry(message.Jid, _clock, message.From, message.To, message.Content));
+            PassMessage(node => node.ConfirmJournal(message));
+        }
+
+        public void Act(JournalMessageFailed message)
+        {
             try
             {
 
@@ -268,11 +357,6 @@ namespace DSVA.Lib.Models
                 return true;
             }
             else return false;
-        }
-
-        public void Act(RecordMessage message)
-        {
-
         }
 
         public void Act(Disconnect message)

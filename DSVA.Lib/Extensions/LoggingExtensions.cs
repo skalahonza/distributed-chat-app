@@ -21,5 +21,8 @@ namespace DSVA.Lib.Extensions
 
         public static void LogWarn(this ILogger log, IDictionary<int, long> clock, int id, string message) =>
             log.LogWarning($"{id}: <{Clock(clock)}> - {message}");
+
+        public static void LogError(this ILogger log, IDictionary<int, long> clock, int id, string message) =>
+            log.LogError($"{id}: <{Clock(clock)}> - {message}");
     }
 }

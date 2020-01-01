@@ -27,8 +27,18 @@ namespace DSVA.Service
             });
         }
 
+        public override Task<Status> SendMessageClient(ChatMessageClient request, ServerCallContext context)
+        {
+            _node.SendMessage(request.From,request.To,request.To);
+            return Task.FromResult(new Status
+            {
+                Ok = true
+            });
+        }
+
         public override Task<Status> SendMessage(ChatMessage request, ServerCallContext context)
         {
+            _node.Act(request);
             return Task.FromResult(new Status
             {
                 Ok = true
