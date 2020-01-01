@@ -22,41 +22,62 @@ namespace DSVA.Lib.Models
         private bool isParticipant;
 
         private string _nextAddr;
-        private int _neighbours;
         private ChatClient _next;
         private ChatClient _nextNext;
         private string _nextNextAddr;
         private readonly ConcurrentDictionary<int, long> _clock;
         private readonly ISet<string> _messages = new HashSet<string>();
+        private readonly NodeOptions _options;
 
         public Node(IOptions<NodeOptions> options, ILogger<Node> log)
-            : this(options.Value.Next, options.Value.NextNext, options.Value.NeighboursCount, options.Value.Id, log)
+            : this(options.Value, log)
         {
-            log.LogInformation($"Initializing node with: {options.Value}");
+            log.LogInformation("Initializing node with: {@options}", options.Value);
         }
 
-        private Node(string next, string nextNext, int neighbours, int id, ILogger log)
+        private Node(NodeOptions options, ILogger log)
         {
+            _options = options;
             _log = log;
-            _id = id;
-            _neighbours = neighbours;
-            _clock = new ConcurrentDictionary<int, long>(Enumerable.Range(0, neighbours).ToDictionary(x => x, _ => (long)0));
-            (_nextAddr, _nextNextAddr) = (next, nextNext);
-            if (!string.IsNullOrEmpty(next))
-                _next = new ChatClient(GrpcChannel.ForAddress(next));
-            if (!string.IsNullOrEmpty(nextNext))
-                _nextNext = new ChatClient(GrpcChannel.ForAddress(nextNext));
-            Task.Delay(TimeSpan.FromSeconds(5)).Wait();
-            InitElection();
+            _id = options.Id;            
+            _clock = new ConcurrentDictionary<int, long>(Enumerable.Range(0, _id + 1).ToDictionary(x => x, _ => (long)0));
+            (_nextAddr, _nextNextAddr) = (options.Next, options.NextNext);
+            if (!string.IsNullOrEmpty(options.Next))
+            {
+                _next = new ChatClient(GrpcChannel.ForAddress(options.Next));
+                if (!string.IsNullOrEmpty(options.NextNext))
+                {
+                    _nextNext = new ChatClient(GrpcChannel.ForAddress(options.NextNext));
+                }
+            }
         }
 
         private bool IsLeader() => (leaderId ?? -1) == _id;
 
-        public void UpdateClock(IDictionary<int, long> clock)
+        public void SendConnected()
+        {
+            if (_next != null)
+            {
+                _log.LogWarn(_clock, _id, "Sending connected message.");
+                PassMessage((x) => x.Connected(new Connect
+                {
+                    Node = _id,
+                    Addr = _options.Address,
+                    Header = CreateHeader(),
+                    NextAddr = _options.Next,
+                    NextId = _options.NextId,
+                    NextNextAddr = _options.NextNext,
+                    NextNextId = _options.NextNextId
+                }));
+            }
+            InitElection();
+        }
+
+        private void UpdateClock(IDictionary<int, long> clock)
         {
             foreach (var (k, v) in clock.Select(x => (x.Key, x.Value)))
             {
-                if (_clock[k] < v)
+                if (_clock.GetOrAdd(k, 0) < v)
                     _clock[k] = v;
             }
         }
@@ -64,10 +85,12 @@ namespace DSVA.Lib.Models
         private Header CreateHeader()
         {
             _clock[_id]++;
+            var id = Guid.NewGuid().ToString();
+            _messages.Add(id);
             return new Header()
             {
-                Id = Guid.NewGuid().ToString(),
-                Leader = -1,
+                Id = id,
+                Leader = leaderId.GetValueOrDefault(-1),
                 Clock = { _clock.OrderBy(x => x.Key).Select(x => x.Value) }
             };
         }
@@ -79,14 +102,14 @@ namespace DSVA.Lib.Models
         /// <returns>true if duplicate message detected</returns>
         private bool ProcessHeader<T>(Header header, T message)
         {
-            _log.LogMessage(_clock, _id, $"Message {typeof(T).Name} with id: {header.Id} received.");
+            _log.LogMessage(_clock, _id, message);
             if (!_messages.Add(header.Id))
             {
                 _log.LogWarn(_clock, _id, $"Message {typeof(T).Name} with id: {header.Id} is duplicate, skipping.");
                 return true;
             }
 
-            UpdateClock(Enumerable.Range(0, _neighbours).Zip(header.Clock).ToDictionary(x => x.First, x => x.Second));
+            UpdateClock(Enumerable.Range(0, header.Clock.Count).Zip(header.Clock).ToDictionary(x => x.First, x => x.Second));
             return false;
         }
 
@@ -96,14 +119,6 @@ namespace DSVA.Lib.Models
 
         private void PassMessage(Action<ChatClient> pass, Action<RpcException> OnFailure, bool passThrough = true)
         {
-            //If I am alone
-            if (_next == null)
-            {
-                //and not a leader
-                if (!IsLeader())
-                    InitElection();
-                return;
-            }
             // pass next
             // call on failure if fails
             try
@@ -125,9 +140,9 @@ namespace DSVA.Lib.Models
         private void InitElection()
         {
             _log.LogMessage(_clock, _id, "Initializing election.");
-            if (_neighbours == 1)
+            if (_next == null)
             {
-                _log.LogWarn(_clock, _id, "I am alone, winning election instantly.");
+                _log.LogWarn(_clock, _id, "I am alone, winning election instantly. I am the senate.");
                 leaderId = _id;
                 return;
             }
@@ -241,26 +256,49 @@ namespace DSVA.Lib.Models
 
         public void Act(Connect node)
         {
-            if (ProcessHeader(node.Header, node)) return;
-            _neighbours++;
-            if(_next == null)
+            if (ProcessHeader(node.Header, node) || node.Node == _id) return;
+            // Second node added to the circle
+            if (_next == null)
             {
                 _nextAddr = node.Addr;
                 _next = new ChatClient(GrpcChannel.ForAddress(node.Addr));
             }
-            if(_nextNext == null && node.NextId != _id)
+            // Third node added to the circle
+            else if (_nextNext == null && node.NextId == _id)
             {
-                _nextNextAddr = node.NextAddr;
-                _nextNext = new ChatClient(GrpcChannel.ForAddress(node.NextAddr));
+                // I am in fron of the node: node-->me-->x
+                if (node.NextId == _id)
+                {
+                    _nextNextAddr = node.Addr;
+                    _nextNext = _nextNext = new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
+                }
             }
-            if(node.NextAddr == _nextAddr)
+            // I am behind the new node
+            else if (node.NextAddr == _nextAddr)
             {
+                // treat next as nextnext
                 _nextNextAddr = _nextAddr;
                 _nextNext = new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
 
+                // newcomer is my new next
                 _nextAddr = node.Addr;
                 _next = new ChatClient(GrpcChannel.ForAddress(_nextAddr));
             }
+            //if (_nextNext == null && node.NextId != _id)
+            //{
+            //    _nextNextAddr = node.NextAddr;
+            //    _nextNext = new ChatClient(GrpcChannel.ForAddress(node.NextAddr));
+            //}
+            //if (node.NextAddr == _nextAddr)
+            //{
+            //    _nextNextAddr = _nextAddr;
+            //    _nextNext = new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
+
+            //    _nextAddr = node.Addr;
+            //    _next = new ChatClient(GrpcChannel.ForAddress(_nextAddr));
+            //}
+            PassMessage(x => x.Connected(node));
+            _log.LogWarn(_clock, _id, $"Next: {_nextAddr}, NextNext: {_nextNextAddr}");
         }
     }
 }
