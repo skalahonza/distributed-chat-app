@@ -25,7 +25,7 @@ message Empty{}
 message Header{
     repeated int64 clock = 1;
     string id = 2;
-    int32 leader = 3;
+    string leader = 3;
 }
 
 // Heartbeat message for testing 
@@ -43,13 +43,13 @@ message Status{
 // Start election
 message Election{
     Header header = 1;
-     int32 node = 2;
+    string node = 2;
 }
 
 // Won election
 message Elected{
     Header header = 1;
-     int32 node = 2;
+    string node = 2;
 }
 
 // Send chat message to a ring
@@ -117,9 +117,7 @@ message Connect {
     int32 node = 2;
     string addr = 3;
     string _nextAddr = 4;
-    int32 _nextId = 5;
     string _nextNextAddr = 6;
-    int32 _nextNextId = 7;
 }
 
 // droped node detected

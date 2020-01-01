@@ -17,7 +17,7 @@ namespace DSVA.Lib.Models
     {
         private ILogger _log;
         private readonly int _id;
-        private int? leaderId;
+        private string leaderId = "";
 
         //Initially each process in the ring is marked as non-participant.
         private bool isParticipant;
@@ -55,7 +55,7 @@ namespace DSVA.Lib.Models
             }
         }
 
-        private bool IsLeader() => (leaderId ?? -1) == _id;
+        private bool IsLeader() => leaderId == _options.Address;
 
         public void SendConnected()
         {
@@ -67,10 +67,8 @@ namespace DSVA.Lib.Models
                     Node = _id,
                     Addr = _options.Address,
                     Header = CreateHeader(),
-                    NextAddr = _options.Next,
-                    NextId = _options.NextId,
-                    NextNextAddr = _options.NextNext,
-                    NextNextId = _options.NextNextId
+                    NextAddr = _options.Next ?? "",
+                    NextNextAddr = _options.NextNext ?? "",
                 }));
             }
             InitElection();
@@ -93,7 +91,7 @@ namespace DSVA.Lib.Models
             return new Header()
             {
                 Id = id,
-                Leader = leaderId.GetValueOrDefault(-1),
+                Leader = leaderId,
                 Clock = { _clock.OrderBy(x => x.Key).Select(x => x.Value) }
             };
         }
@@ -117,8 +115,12 @@ namespace DSVA.Lib.Models
         }
 
         //TODO HANDLE DEAED NODES
+        // TOOD HADNEL UNDELIVERABLE CHAT MASSAGES
         private void PassMessage(Action<ChatClient> pass, bool passThrough = true) =>
-            PassMessage(pass, _ => { }, passThrough);
+            PassMessage(pass, _ =>
+            {
+
+            }, passThrough);
 
         private void PassMessage(Action<ChatClient> pass, Action<RpcException> OnFailure, bool passThrough = true)
         {
@@ -146,14 +148,14 @@ namespace DSVA.Lib.Models
             if (_next == null)
             {
                 _log.LogWarn(_clock, _id, "I am alone, winning election instantly. I am the senate.");
-                leaderId = _id;
+                leaderId = _options.Address;
                 return;
             }
 
             isParticipant = true;
             var message = new Election
             {
-                Node = _id,
+                Node = _options.Address,
                 Header = CreateHeader()
             };
             PassMessage(node => node.StartElection(message));
@@ -165,7 +167,7 @@ namespace DSVA.Lib.Models
             if (ProcessHeader(message.Header, message)) return;
 
             //If the UID in the election message is smaller, the process unconditionally forwards the election message in a clockwise direction.
-            if (message.Node < _id)
+            if (string.Compare(message.Node,_options.Address) < 0)
             {
                 isParticipant = true;
                 var e = new Election
@@ -177,7 +179,7 @@ namespace DSVA.Lib.Models
             }
 
             //If the UID in the election message is larger
-            if (message.Node > _id)
+            else if (string.Compare(message.Node, _options.Address) > 0)
             {
                 //and the process is not yet a participant, the process replaces the UID in the message with its own UID, sends the updated election message in a clockwise direction.
                 if (!isParticipant)
@@ -185,7 +187,7 @@ namespace DSVA.Lib.Models
                     isParticipant = true;
                     var e = new Election
                     {
-                        Node = _id,
+                        Node = _options.Address,
                         Header = CreateHeader()
                     };
                     PassMessage(node => node.StartElection(e));
@@ -195,16 +197,16 @@ namespace DSVA.Lib.Models
                 //the process discards the election message.
             }
 
-            if (message.Node == _id)
+            else
             {
                 //If the UID in the incoming election message is the same as the UID of the process, that process starts acting as the leader.
                 //The leader process marks itself as non-participant and sends an elected message to its neighbour announcing its election and UID.
                 isParticipant = false;
-                leaderId = _id;
+                leaderId = _options.Address;
                 var e = new Elected
                 {
                     Header = CreateHeader(),
-                    Node = _id
+                    Node = _options.Address
                 };
                 PassMessage(node => node.WonElection(e));
             }
@@ -214,7 +216,7 @@ namespace DSVA.Lib.Models
         {
             if (ProcessHeader(message.Header, message)) return;
             //When a process receives an elected message, it marks itself as non-participant, records the elected UID, and forwards the elected message unchanged.
-            if (message.Node != _id)
+            if (message.Node != _options.Address)
             {
                 isParticipant = false;
                 leaderId = message.Node;
@@ -352,8 +354,8 @@ namespace DSVA.Lib.Models
                 _nextAddr = _nextNextAddr;
                 _next = _nextNext;
 
-                _nextNextAddr = next;
-                _nextNext = string.IsNullOrEmpty(next) ? null : new ChatClient(GrpcChannel.ForAddress(next));
+                _nextNextAddr = next != _options.Address ? next : null;
+                _nextNext = string.IsNullOrEmpty(_nextNextAddr) ? null : new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
                 return true;
             }
             else return false;
@@ -383,14 +385,10 @@ namespace DSVA.Lib.Models
                 _next = new ChatClient(GrpcChannel.ForAddress(node.Addr));
             }
             // Third node added to the circle
-            else if (_nextNext == null && node.NextId == _id)
+            else if (_nextNext == null && node.NextAddr == _options.Address)
             {
-                // I am in fron of the node: node-->me-->x
-                if (node.NextId == _id)
-                {
-                    _nextNextAddr = node.Addr;
-                    _nextNext = _nextNext = new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
-                }
+                _nextNextAddr = node.Addr;
+                _nextNext = _nextNext = new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
             }
             // I am behind the new node
             else if (node.NextAddr == _nextAddr)
