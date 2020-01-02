@@ -12,3 +12,10 @@ $env:Node:address="https://localhost:5003"
 $env:Node:next="https://localhost:5001"
 $env:Node:nextNext="https://localhost:5002"
 $env:Node:id=2
+
+# Node 3
+$env:ASPNETCORE_URLS="https://*:5004"
+$env:Node:address="https://localhost:5004"
+$env:Node:next="https://localhost:5001"
+$env:Node:nextNext="https://localhost:5002"
+$env:Node:id=3

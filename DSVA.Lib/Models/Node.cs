@@ -145,14 +145,16 @@ namespace DSVA.Lib.Models
             // call on failure if fails
             try
             {
-                pass(_next);
+                if (_next != null)
+                    pass(_next);
             }
             catch (RpcException e)
             {
                 _log.LogException(_clock, _id, e, $"Failed sending to {_nextAddr}.");
                 OnFailure(e);
                 if (passThrough) // TODO NEXT NEXT EXISTS?
-                    pass(_nextNext);
+                    if (_nextNext != null)
+                        pass(_nextNext);
             }
         }
 
@@ -367,8 +369,10 @@ namespace DSVA.Lib.Models
         {
             if (ProcessHeader(message.Header, message)) return;
             // My next node disconnected
+            // Me --> dead -->
             if (message.Addr == _nextAddr)
             {
+                _log.LogWarn(_clock, _id, "My Next node disconnected.");
                 _nextAddr = _nextNextAddr;
                 _next = _nextNext;
 
@@ -376,7 +380,17 @@ namespace DSVA.Lib.Models
                 _nextNext = string.IsNullOrEmpty(_nextNextAddr) ? null : new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
                 _log.LogWarn(_clock, _id, $"Next: {_nextAddr}, NextNext: {_nextNextAddr}, Leader: {leaderId}");
             }
-            
+            // My next node disconnected
+            // Me --> node --> dead
+            else if (message.Addr == _nextNextAddr)
+            {
+                _log.LogWarn(_clock, _id, "My Next Next node disconnected.");
+                _nextNextAddr = message.NextAddr;
+                _nextNext = string.IsNullOrEmpty(_nextNextAddr) ? null : new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
+                message.Header = CreateHeader();
+                PassMessage(node => node.SignOut(message));
+                _log.LogWarn(_clock, _id, $"Next: {_nextAddr}, NextNext: {_nextNextAddr}, Leader: {leaderId}");
+            }
             else
             {
                 message.Header = CreateHeader();
@@ -388,9 +402,10 @@ namespace DSVA.Lib.Models
         {
             if (ProcessHeader(message.Header, message)) return;
             // My next node disconnected
+            // Me --> dead -->
             if (message.Addr == _nextAddr)
             {
-                _log.LogWarn(_clock, _id, "My Next node disconnected.");
+                _log.LogWarn(_clock, _id, "My Next node dropped.");
                 _nextAddr = _nextNextAddr;
                 _next = _nextNext;
 
@@ -398,7 +413,17 @@ namespace DSVA.Lib.Models
                 _nextNext = string.IsNullOrEmpty(_nextNextAddr) ? null : new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
                 _log.LogWarn(_clock, _id, $"Next: {_nextAddr}, NextNext: {_nextNextAddr}, Leader: {leaderId}");
             }
-
+            // My next next node disconnected
+            // Me --> node --> dead
+            else if (message.Addr == _nextNextAddr)
+            {
+                _log.LogWarn(_clock, _id, "My Next Next node dropped.");
+                _nextNextAddr = message.NextAddr;
+                _nextNext = string.IsNullOrEmpty(_nextNextAddr) ? null : new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
+                message.Header = CreateHeader();
+                PassMessage(node => node.Drop(message));
+                _log.LogWarn(_clock, _id, $"Next: {_nextAddr}, NextNext: {_nextNextAddr}, Leader: {leaderId}");
+            }
             // My previous node disconnected
             else if (message.NextAddr == _options.Address)
             {
@@ -430,6 +455,7 @@ namespace DSVA.Lib.Models
                 _nextNext = _nextNext = new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
             }
             // I am behind the new node
+            // me new node
             else if (node.NextAddr == _nextAddr)
             {
                 // treat next as nextnext
@@ -439,6 +465,12 @@ namespace DSVA.Lib.Models
                 // newcomer is my new next
                 _nextAddr = node.Addr;
                 _next = new ChatClient(GrpcChannel.ForAddress(_nextAddr));
+            }
+            // me node new
+            else if (node.NextAddr == _nextNextAddr)
+            {
+                _nextNextAddr = node.Addr;
+                _nextNext = new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
             }
             PassMessage(x => x.Connected(node));
             _log.LogWarn(_clock, _id, $"Next: {_nextAddr}, NextNext: {_nextNextAddr}, Leader: {leaderId}");
