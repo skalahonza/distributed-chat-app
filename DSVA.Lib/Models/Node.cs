@@ -64,12 +64,12 @@ namespace DSVA.Lib.Models
             _log = log;
             _id = options.Id;
             _clock = new ConcurrentDictionary<int, long>(Enumerable.Range(0, _id + 1).ToDictionary(x => x, _ => (long)0));
-            (NextAddr, NextNextAddr) = (options.Next, options.NextNext);
+            (NextAddr, NextNextAddr) = (options.Next, "");
         }
 
         private bool IsLeader() => leaderId == _options.Address;
 
-        public void SendConnected()
+        public void SendConnected(string next = null)
         {
             if (_next != null)
             {
@@ -79,8 +79,8 @@ namespace DSVA.Lib.Models
                     Node = _id,
                     Addr = _options.Address,
                     Header = CreateHeader(),
-                    NextAddr = _options.Next ?? "",
-                    NextNextAddr = _options.NextNext ?? "",
+                    NextAddr = _options.Next ?? next ?? "",
+                    NextNextAddr = "",
                 }));
             }
             InitElection();
@@ -458,19 +458,22 @@ namespace DSVA.Lib.Models
 
         public void Act(Connect node)
         {
-            if (ProcessHeader(node.Header, node) || node.Node == _id) return;
+            if (ProcessHeader(node.Header, node)) return;
+
+            // I am the new node and other nodes already filled my nextnext
+            if(node.Addr == _options.Address)
+            {
+                NextNextAddr = node.NextNextAddr;
+                _log.LogWarn(_clock, _id, $"Connected Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
+                return;
+            }
+
             // Second node added to the circle
             if (_next == null)
             {
                 NextAddr = node.Addr;
             }
-            // Third node added to the circle
-            else if (_nextNext == null && node.NextAddr == _options.Address)
-            {
-                NextNextAddr = node.Addr;
-            }
-            // I am behind the new node
-            // me new node
+            // me new x
             else if (node.NextAddr == NextAddr)
             {
                 // treat next as nextnext
@@ -479,11 +482,22 @@ namespace DSVA.Lib.Models
                 // newcomer is my new next
                 NextAddr = node.Addr;
             }
-            // me node new
-            else if (node.NextAddr == NextNextAddr)
+            // me x new
+            else if (node.NextAddr == NextNextAddr && node.Addr != NextAddr)
             {
                 NextNextAddr = node.Addr;
             }
+            // new me x
+            else if(node.NextAddr == _options.Address)
+            {
+                // Third node added to the circle
+                if (_nextNext == null)
+                    NextNextAddr = node.Addr;
+                //TODE  Resumption - node dropped, noone detected and recovered                
+                node.NextNextAddr = NextAddr;
+            }
+
+            node.Header = CreateHeader();
             PassMessage(x => x.Connected(node));
             _log.LogWarn(_clock, _id, $"Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
         }
