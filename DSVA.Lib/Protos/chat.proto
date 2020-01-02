@@ -105,10 +105,10 @@ message ChatMessageClient{
 
 // node gracefuly disconnected
 message Disconnect {
-    Header header = 1;
-    int32 node = 2;
+    Header header = 1;    
     string addr = 3;
     string _nextAddr = 4;
+    string _nextNextAddr = 5;
 }
 
 // node gracefully connected
@@ -122,8 +122,8 @@ message Connect {
 
 // droped node detected
 message Dropped {
-    Header header = 1;
-    int32 node = 2;
+    Header header = 1;    
     string addr = 3;
     string _nextAddr = 4;
+    string _nextNextAddr = 5;
 }

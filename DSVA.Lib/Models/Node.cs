@@ -83,10 +83,11 @@ namespace DSVA.Lib.Models
             }
         }
 
-        private Header CreateHeader()
+        private Header CreateHeader() => CreateHeader(Guid.NewGuid().ToString());
+
+        private Header CreateHeader(string id)
         {
             _clock[_id]++;
-            var id = Guid.NewGuid().ToString();
             _messages.Add(id);
             return new Header()
             {
@@ -114,15 +115,31 @@ namespace DSVA.Lib.Models
             return false;
         }
 
-        //TODO HANDLE DEAED NODES
+        // TODO HANDLE DEAED NODES
+        // TODO Update clock  
         // TOOD HADNEL UNDELIVERABLE CHAT MASSAGES
-        private void PassMessage(Action<ChatClient> pass, bool passThrough = true) =>
+        private void PassMessage(Action<ChatClient> pass, bool passThrough = false) =>
             PassMessage(pass, _ =>
             {
-
+                //Inform about dropped node
+                _log.LogError(_clock, _id, $"Node {_nextAddr} detected as dropped.");
+                var dropped = _nextAddr;
+                _nextNext?.Drop(new Dropped
+                {
+                    Header = CreateHeader(),
+                    Addr = _nextAddr,
+                    NextAddr = _nextNextAddr,
+                    NextNextAddr = "",
+                });
+                // Leader is dead
+                if (dropped == leaderId)
+                {
+                    _log.LogError(_clock, _id, $"Dropped node {_nextAddr} was a leader, initializing election.");
+                    InitElection();
+                }
             }, passThrough);
 
-        private void PassMessage(Action<ChatClient> pass, Action<RpcException> OnFailure, bool passThrough = true)
+        private void PassMessage(Action<ChatClient> pass, Action<RpcException> OnFailure, bool passThrough = false)
         {
             // pass next
             // call on failure if fails
@@ -134,7 +151,7 @@ namespace DSVA.Lib.Models
             {
                 _log.LogException(_clock, _id, e, $"Failed sending to {_nextAddr}.");
                 OnFailure(e);
-                if (passThrough)
+                if (passThrough) // TODO NEXT NEXT EXISTS?
                     pass(_nextNext);
             }
         }
@@ -167,7 +184,7 @@ namespace DSVA.Lib.Models
             if (ProcessHeader(message.Header, message)) return;
 
             //If the UID in the election message is smaller, the process unconditionally forwards the election message in a clockwise direction.
-            if (string.Compare(message.Node,_options.Address) < 0)
+            if (string.Compare(message.Node, _options.Address) < 0)
             {
                 isParticipant = true;
                 var e = new Election
@@ -346,33 +363,55 @@ namespace DSVA.Lib.Models
             }
         }
 
-        private bool HandleDisonnected(string addr, string next)
+        public void Act(Disconnect message)
         {
-            // Node behind me disconnected
-            if (addr == _nextAddr)
+            if (ProcessHeader(message.Header, message)) return;
+            // My next node disconnected
+            if (message.Addr == _nextAddr)
             {
                 _nextAddr = _nextNextAddr;
                 _next = _nextNext;
 
-                _nextNextAddr = next != _options.Address ? next : null;
+                _nextNextAddr = message.NextNextAddr != _options.Address ? message.NextNextAddr : "";
                 _nextNext = string.IsNullOrEmpty(_nextNextAddr) ? null : new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
-                return true;
+                _log.LogWarn(_clock, _id, $"Next: {_nextAddr}, NextNext: {_nextNextAddr}, Leader: {leaderId}");
             }
-            else return false;
-        }
-
-        public void Act(Disconnect message)
-        {
-            if (ProcessHeader(message.Header, message)) return;
-            if (HandleDisonnected(message.Addr, message.NextAddr)) return;
-            PassMessage(node => node.SignOut(message));
+            
+            else
+            {
+                message.Header = CreateHeader();
+                PassMessage(node => node.SignOut(message));
+            }
         }
 
         public void Act(Dropped message)
         {
             if (ProcessHeader(message.Header, message)) return;
-            if (HandleDisonnected(message.Addr, message.NextAddr)) return;
-            PassMessage(node => node.Drop(message));
+            // My next node disconnected
+            if (message.Addr == _nextAddr)
+            {
+                _log.LogWarn(_clock, _id, "My Next node disconnected.");
+                _nextAddr = _nextNextAddr;
+                _next = _nextNext;
+
+                _nextNextAddr = message.NextNextAddr != _options.Address ? message.NextNextAddr : "";
+                _nextNext = string.IsNullOrEmpty(_nextNextAddr) ? null : new ChatClient(GrpcChannel.ForAddress(_nextNextAddr));
+                _log.LogWarn(_clock, _id, $"Next: {_nextAddr}, NextNext: {_nextNextAddr}, Leader: {leaderId}");
+            }
+
+            // My previous node disconnected
+            else if (message.NextAddr == _options.Address)
+            {
+                _log.LogWarn(_clock, _id, "My previous node disconnected.");
+                message.NextNextAddr = _nextAddr;
+                message.Header = CreateHeader();
+                PassMessage(node => node.Drop(message));
+            }
+            else
+            {
+                message.Header = CreateHeader();
+                PassMessage(node => node.Drop(message));
+            }
         }
 
         public void Act(Connect node)
