@@ -6,10 +6,10 @@ package chat;
 
 service Chat{
     rpc SendMessageClient (ChatMessageClient) returns (Status);
-    rpc SendMessage (ChatMessage) returns (Status);
-    rpc AddJournal (JournalMessage) returns (Status);
-    rpc ReceiveJournal (JournalMessageReceived) returns (Status);
+    rpc SendMessage (ChatMessage) returns (Status);    
+    rpc MessageReceived (ReceivedMessage) returns (Status);
     rpc ConfirmJournal (JournalMessageConfirm) returns (Status);
+
     rpc HeartBeat (Beat) returns (Status);
     rpc HeartBeatRequest (Empty) returns (Status);
     rpc StartElection (Election) returns (Status);
@@ -61,20 +61,8 @@ message ChatMessage{
 }
 
 // Journal message and wait for confirmation
-message JournalMessage{
+message ReceivedMessage{
     Header header = 1;
-    string from = 2;
-    string to = 3;
-    string content = 4;
-    string jid = 5;
-}
-
-// Journal message and wait for confirmation
-message JournalMessageReceived{
-    Header header = 1;
-    string from = 2;
-    string to = 3;
-    string content = 4;
     string jid = 5;
 }
 
@@ -85,15 +73,7 @@ message JournalMessageConfirm{
     string to = 3;
     string content = 4;
     string jid = 5;
-}
-
-// Unable to deliver chat message
-message JournalMessageFailed{
-    Header header = 1;
-    string from = 2;
-    string to = 3;
-    string content = 4;
-    string jid = 5;
+    map<int32, int64> jclock = 6;
 }
 
 // send chat message, only for WPF client

@@ -13,14 +13,9 @@ namespace DSVA.Lib.Models
         public string Id { get; } = Guid.NewGuid().ToString();
 
         public JournalEntry(string jid, IDictionary<int, long> clock, string from, string to, string content)
-        : this(clock, from, to, content)
         {
             Id = jid;
-        }
-
-        public JournalEntry(IDictionary<int, long> clock, string from, string to, string content)
-        {
-            Clock = clock;
+            Clock = new Dictionary<int, long>(clock);
             From = from;
             To = to;
             Content = content;

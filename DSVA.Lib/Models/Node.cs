@@ -28,7 +28,7 @@ namespace DSVA.Lib.Models
             set
             {
                 nextAddr = value;
-                (_next, nextAddr) = string.IsNullOrEmpty(value) || value == _options.Address ? (null,"") : (new ChatClient(GrpcChannel.ForAddress(value)), value);
+                (_next, nextAddr) = string.IsNullOrEmpty(value) || value == _options.Address ? (null, "") : (new ChatClient(GrpcChannel.ForAddress(value)), value);
             }
         }
 
@@ -38,7 +38,7 @@ namespace DSVA.Lib.Models
             set
             {
                 nextNextAddr = value;
-                (_nextNext,nextNextAddr) = string.IsNullOrEmpty(value) || value == _options.Address ? (null, "") : (new ChatClient(GrpcChannel.ForAddress(value)), value);
+                (_nextNext, nextNextAddr) = string.IsNullOrEmpty(value) || value == _options.Address ? (null, "") : (new ChatClient(GrpcChannel.ForAddress(value)), value);
             }
         }
 
@@ -105,7 +105,7 @@ namespace DSVA.Lib.Models
             {
                 Id = id,
                 Leader = leaderId,
-                Clock = { _clock.OrderBy(x => x.Key).Select(x => x.Value) }
+                Clock = { _clock.ToOrderedValues() }
             };
         }
 
@@ -292,78 +292,79 @@ namespace DSVA.Lib.Models
                 From = from,
                 To = to,
                 Content = content
-            });
+            },false);
         }
 
-        public void Act(ChatMessage message)
+        public void Act(ChatMessage message, bool validate = true)
         {
-            if (ProcessHeader(message.Header, message)) return;
-            if (IsLeader())
+            if (validate && ProcessHeader(message.Header, message)) return;
+            if (IsLeader() && message.To == _options.Address)
             {
-                var entry = new JournalEntry(_clock, message.From, message.To, message.Content);
+                var entry = new JournalEntry(message.Header.Id, _clock, message.From, message.To, message.Content)
+                {
+                    IsConfirmed = true
+                };
                 _journal.Add(entry);
-                PassMessage(node => node.AddJournal(new JournalMessage
+                PassMessage(node => node.ConfirmJournal(new JournalMessageConfirm
                 {
                     Header = CreateHeader(),
                     Content = message.Content,
-                    From = message.From,
                     Jid = entry.Id,
-                    To = message.To
+                    From = message.From,
+                    To = message.To,
+                    Jclock = { _clock }
                 }));
             }
+            else if (IsLeader())
+            {
+                var entry = new JournalEntry(message.Header.Id, _clock, message.From, message.To, message.Content);
+                _journal.Add(entry);
+                PassMessage(node => node.SendMessage(message));
+            }
+            // recipient 
+            else if (message.To == _options.Address)
+            {
+                PassMessage(node => node.SendMessage(message));
+                PassMessage(node => node.MessageReceived(new ReceivedMessage
+                {
+                    Header = CreateHeader(),
+                    Jid = message.Header.Id
+                }));
+            }
+            // other nodes - forward
             else
             {
                 PassMessage(node => node.SendMessage(message));
             }
         }
 
-        public void Act(JournalMessage message)
-        {
-            if (ProcessHeader(message.Header, message)) return;
-            if (message.To == _options.Address)
-            {
-                PassMessage(node => node.ReceiveJournal(new JournalMessageReceived
-                {
-                    Header = CreateHeader(),
-                    Content = message.Content,
-                    From = message.From,
-                    To = message.To,
-                    Jid = message.Jid
-                }));
-            }
-            else
-            {
-                PassMessage(node => node.AddJournal(message));
-            }
-        }
-
-        public void Act(JournalMessageReceived message)
+        public void Act(ReceivedMessage message)
         {
             if (ProcessHeader(message.Header, message)) return;
             if (IsLeader())
             {
                 var entry = _journal.FirstOrDefault(x => x.Id == message.Jid);
                 if (entry == null)
-                {
-                    _log.LogError(_clock, _id, $"Journal entry with id {message.Jid} not found.");
-                }
+                    _log.LogError(_clock, _id, $"Journal with id {message.Jid} not found.");
                 else
                 {
-
+                    _log.LogWarn(_clock, _id, $"Journal with id {message.Jid} confirmed.");
                     entry.IsConfirmed = true;
                     PassMessage(node => node.ConfirmJournal(new JournalMessageConfirm
                     {
                         Header = CreateHeader(),
-                        Content = message.Content,
-                        From = message.From,
-                        To = message.To,
-                        Jid = message.Jid
+                        Jid = entry.Id,
+                        Content = entry.Content,
+                        From = entry.From,
+                        To = entry.To,
+                        Jclock = { _clock }
                     }));
                 }
             }
             else
             {
-                PassMessage(node => node.ReceiveJournal(message));
+                message.Header = CreateHeader(message.Header.Id);
+                PassMessage(node => node.MessageReceived(message));
             }
         }
 
@@ -371,19 +372,8 @@ namespace DSVA.Lib.Models
         {
             if (ProcessHeader(message.Header, message)) return;
             _journal.Add(new JournalEntry(message.Jid, _clock, message.From, message.To, message.Content));
+            message.Header = CreateHeader(message.Header.Id);
             PassMessage(node => node.ConfirmJournal(message));
-        }
-
-        public void Act(JournalMessageFailed message)
-        {
-            try
-            {
-
-            }
-            catch (RpcException e)
-            {
-
-            }
         }
 
         // TODO what if leader disconnected
@@ -395,9 +385,9 @@ namespace DSVA.Lib.Models
             if (message.Addr == NextAddr)
             {
                 _log.LogWarn(_clock, _id, "My Next node disconnected.");
-                NextAddr = NextNextAddr;                
+                NextAddr = NextNextAddr;
 
-                NextNextAddr = message.NextNextAddr != _options.Address ? message.NextNextAddr : "";                
+                NextNextAddr = message.NextNextAddr != _options.Address ? message.NextNextAddr : "";
                 _log.LogWarn(_clock, _id, $"Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
             }
             // My next node disconnected
@@ -461,8 +451,10 @@ namespace DSVA.Lib.Models
             if (ProcessHeader(node.Header, node)) return;
 
             // I am the new node and other nodes already filled my nextnext
-            if(node.Addr == _options.Address)
+            if (node.Addr == _options.Address)
             {
+                // TODO sync messages
+                // TODO sync leader?
                 NextNextAddr = node.NextNextAddr;
                 _log.LogWarn(_clock, _id, $"Connected Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
                 return;
@@ -478,7 +470,6 @@ namespace DSVA.Lib.Models
             {
                 // treat next as nextnext
                 NextNextAddr = NextAddr;
-
                 // newcomer is my new next
                 NextAddr = node.Addr;
             }
@@ -488,7 +479,7 @@ namespace DSVA.Lib.Models
                 NextNextAddr = node.Addr;
             }
             // new me x
-            else if(node.NextAddr == _options.Address)
+            else if (node.NextAddr == _options.Address)
             {
                 // Third node added to the circle
                 if (_nextNext == null)

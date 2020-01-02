@@ -18,14 +18,17 @@ namespace DSVA.Client.ViewModels
 
         public string Service { get; set; }
         public string Message { get; set; }
+        public string To { get; set; }
 
         public RelayCommand SendMessageCommand => new RelayCommand(_ =>
        {
            try
            {
-               var response = _client.SendMessage(new ChatMessage
+               var response = _client.SendMessageClient(new ChatMessageClient
                {
                    Content = Message,
+                   From = Service,
+                   To = To
                });
                Messages.Add(new Message { Content = Message, IsFromMe = true });
                Message = "";

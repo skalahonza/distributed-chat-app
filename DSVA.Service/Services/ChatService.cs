@@ -29,7 +29,7 @@ namespace DSVA.Service
 
         public override Task<Status> SendMessageClient(ChatMessageClient request, ServerCallContext context)
         {
-            _node.SendMessage(request.From,request.To,request.To);
+            _node.SendMessage(request.From,request.To,request.Content);
             return Task.FromResult(new Status
             {
                 Ok = true
@@ -82,6 +82,24 @@ namespace DSVA.Service
         }
 
         public override Task<Status> SignOut(Disconnect request, ServerCallContext context)
+        {
+            _node.Act(request);
+            return Task.FromResult(new Status
+            {
+                Ok = true
+            });
+        }
+
+        public override Task<Status> MessageReceived(ReceivedMessage request, ServerCallContext context)
+        {
+            _node.Act(request);
+            return Task.FromResult(new Status
+            {
+                Ok = true
+            });
+        }
+
+        public override Task<Status> ConfirmJournal(JournalMessageConfirm request, ServerCallContext context)
         {
             _node.Act(request);
             return Task.FromResult(new Status
