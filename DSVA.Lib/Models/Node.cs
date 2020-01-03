@@ -29,7 +29,7 @@ namespace DSVA.Lib.Models
             set
             {
                 nextAddr = value == _options.Address ? "" : value;
-                _next = Create(value);                
+                _next = Create(value);
             }
         }
 
@@ -39,7 +39,7 @@ namespace DSVA.Lib.Models
             set
             {
                 nextNextAddr = value == _options.Address ? "" : value;
-                _nextNext = Create(value);                
+                _nextNext = Create(value);
             }
         }
 
@@ -132,38 +132,40 @@ namespace DSVA.Lib.Models
             return false;
         }
 
+        private void HandleDeadNodes(RpcException ex = default)
+        {
+            //Inform about dropped node
+            _log.LogError(_clock, _id, $"Node {NextAddr} detected as dropped.");
+            var dropped = NextAddr;
+            if (string.IsNullOrEmpty(NextNextAddr))
+            {
+                _log.LogWarn(_clock, _id, "No fallback node.");
+                NextAddr = "";
+            }
+            else
+            {
+                _nextNext?.Drop(new Dropped
+                {
+                    Header = CreateHeader(),
+                    Addr = NextAddr,
+                    NextAddr = NextNextAddr,
+                    NextNextAddr = "",
+                });
+            }
+
+            // Leader is dead
+            if (dropped == leaderId)
+            {
+                _log.LogError(_clock, _id, $"Dropped node {NextAddr} was a leader, initializing election.");
+                InitElection();
+            }
+        }
+
         // HANDLE DEAED NODES
-        // TODO Update clock every time you sned message 
+        // TODO Update clock every time you send message 
         // TOOD HADNEL UNDELIVERABLE CHAT MASSAGES
         private void PassMessage(Action<ChatClient> pass, bool passThrough = false) =>
-            PassMessage(pass, _ =>
-            {
-                //Inform about dropped node
-                _log.LogError(_clock, _id, $"Node {NextAddr} detected as dropped.");
-                var dropped = NextAddr;
-                if (string.IsNullOrEmpty(NextNextAddr))
-                {
-                    _log.LogWarn(_clock, _id, "No fallback node.");
-                    NextAddr = "";
-                }
-                else
-                {
-                    _nextNext?.Drop(new Dropped
-                    {
-                        Header = CreateHeader(),
-                        Addr = NextAddr,
-                        NextAddr = NextNextAddr,
-                        NextNextAddr = "",
-                    });
-                }
-
-                // Leader is dead
-                if (dropped == leaderId)
-                {
-                    _log.LogError(_clock, _id, $"Dropped node {NextAddr} was a leader, initializing election.");
-                    InitElection();
-                }
-            }, passThrough);
+            PassMessage(pass, HandleDeadNodes, passThrough);
 
         private void PassMessage(Action<ChatClient> pass, Action<RpcException> OnFailure, bool passThrough = false)
         {
@@ -298,14 +300,14 @@ namespace DSVA.Lib.Models
                 From = from,
                 To = to,
                 Content = content
-            },false);
+            }, false);
         }
 
         public void Act(ChatMessage message, bool validate = true)
         {
             if (validate && ProcessHeader(message.Header, message)) return;
             if (IsLeader() && message.To == _options.Address)
-            {                
+            {
                 var entry = new JournalEntry(message.Header.Id, _clock, message.From, message.To, message.Content)
                 {
                     IsConfirmed = true
@@ -378,7 +380,7 @@ namespace DSVA.Lib.Models
         public void Act(JournalMessageConfirm message)
         {
             if (ProcessHeader(message.Header, message)) return;
-            _journal.Add(new JournalEntry(message.Jid, message.Jclock, message.From, message.To, message.Content) { IsConfirmed = true});
+            _journal.Add(new JournalEntry(message.Jid, message.Jclock, message.From, message.To, message.Content) { IsConfirmed = true });
             message.Header = CreateHeader(message.Header.Id);
             PassMessage(node => node.ConfirmJournal(message));
         }
@@ -457,6 +459,24 @@ namespace DSVA.Lib.Models
         {
             if (ProcessHeader(node.Header, node)) return;
 
+            // Reusmption by accident - connect before dropped/disconnected
+            if (node.Addr == NextAddr)
+            {
+                _log.LogError(_clock, _id, $"Node: {node.Addr} wrongly connected.");
+
+                // mark as dropped
+                HandleDeadNodes();
+
+                // reconnect him correctely
+                _nextNext?.Connected(new Connect
+                {
+                    Header = CreateHeader(),
+                    Addr = node.Addr,
+                    NextAddr = node.NextAddr
+                });
+                return;
+            }
+
             // I am the new node and other nodes already filled my nextnext
             if (node.Addr == _options.Address)
             {
@@ -471,6 +491,7 @@ namespace DSVA.Lib.Models
             {
                 NextAddr = node.Addr;
             }
+
             // me new x
             else if (node.NextAddr == NextAddr)
             {
