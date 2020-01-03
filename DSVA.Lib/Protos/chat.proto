@@ -9,7 +9,7 @@ service Chat{
     rpc SendMessage (ChatMessage) returns (Status);    
     rpc MessageReceived (ReceivedMessage) returns (Status);
     rpc ConfirmJournal (JournalMessageConfirm) returns (Status);
-
+    rpc GetJournal (Empty) returns (JournalEntryResponse);
     rpc HeartBeat (Beat) returns (Status);
     rpc HeartBeatRequest (Empty) returns (Status);
     rpc StartElection (Election) returns (Status);
@@ -74,6 +74,18 @@ message JournalMessageConfirm{
     string content = 4;
     string jid = 5;
     map<int32, int64> jclock = 6;
+}
+
+message JournalEntryData{
+    string from = 2;
+    string to = 3;
+    string content = 4;
+    string jid = 5;
+    map<int32, int64> jclock = 6;
+}
+
+message JournalEntryResponse{
+    repeated JournalEntryData data = 1;
 }
 
 // send chat message, only for WPF client

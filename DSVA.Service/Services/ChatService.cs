@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System.Linq;
+using System.Threading.Tasks;
 using DSVA.Lib.Models;
 using Grpc.Core;
 
@@ -106,6 +107,22 @@ namespace DSVA.Service
             {
                 Ok = true
             });
+        }
+
+        public override Task<JournalEntryResponse> GetJournal(Empty request, ServerCallContext context)
+        {
+            var response = new JournalEntryResponse
+            {
+                Data = {_node.ConfirmedOrderedJournal().Select(x => new JournalEntryData
+                {
+                    Content = x.Content,
+                    From = x.From,
+                    To = x.To,
+                    Jid = x.Id,
+                    Jclock = { x.Clock }
+                })}
+            };
+            return Task.FromResult(response);
         }
     }
 }

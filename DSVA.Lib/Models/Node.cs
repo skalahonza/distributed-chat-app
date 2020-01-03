@@ -68,7 +68,7 @@ namespace DSVA.Lib.Models
             (NextAddr, NextNextAddr) = (options.Next, "");
         }
 
-        private IEnumerable<JournalEntry> ConfirmedOrderedJournal() => _journal
+        public IEnumerable<JournalEntry> ConfirmedOrderedJournal() => _journal
                 .Where(x => x.IsConfirmed)
                 .OrderBy(x => x.Clock, new VectorClockComparer());
 
@@ -132,8 +132,8 @@ namespace DSVA.Lib.Models
             return false;
         }
 
-        // TODO HANDLE DEAED NODES
-        // TODO Update clock  
+        // HANDLE DEAED NODES
+        // TODO Update clock every time you sned message 
         // TOOD HADNEL UNDELIVERABLE CHAT MASSAGES
         private void PassMessage(Action<ChatClient> pass, bool passThrough = false) =>
             PassMessage(pass, _ =>
@@ -304,7 +304,7 @@ namespace DSVA.Lib.Models
         {
             if (validate && ProcessHeader(message.Header, message)) return;
             if (IsLeader() && message.To == _options.Address)
-            {
+            {                
                 var entry = new JournalEntry(message.Header.Id, _clock, message.From, message.To, message.Content)
                 {
                     IsConfirmed = true
@@ -317,11 +317,12 @@ namespace DSVA.Lib.Models
                     Jid = entry.Id,
                     From = message.From,
                     To = message.To,
-                    Jclock = { _clock }
+                    Jclock = { entry.Clock }
                 }));
             }
             else if (IsLeader())
             {
+                var clock = new Dictionary<int, long>(_clock);
                 var entry = new JournalEntry(message.Header.Id, _clock, message.From, message.To, message.Content);
                 _journal.Add(entry);
                 PassMessage(node => node.SendMessage(message));
@@ -362,7 +363,7 @@ namespace DSVA.Lib.Models
                         Content = entry.Content,
                         From = entry.From,
                         To = entry.To,
-                        Jclock = { _clock }
+                        Jclock = { entry.Clock }
                     }));
                 }
             }
@@ -376,7 +377,7 @@ namespace DSVA.Lib.Models
         public void Act(JournalMessageConfirm message)
         {
             if (ProcessHeader(message.Header, message)) return;
-            _journal.Add(new JournalEntry(message.Jid, _clock, message.From, message.To, message.Content));
+            _journal.Add(new JournalEntry(message.Jid, message.Jclock, message.From, message.To, message.Content) { IsConfirmed = true});
             message.Header = CreateHeader(message.Header.Id);
             PassMessage(node => node.ConfirmJournal(message));
         }
@@ -458,8 +459,7 @@ namespace DSVA.Lib.Models
             // I am the new node and other nodes already filled my nextnext
             if (node.Addr == _options.Address)
             {
-                // TODO sync messages
-                // TODO sync leader?
+                // TODO sync messages - get copy of journal                
                 NextNextAddr = node.NextNextAddr;
                 _log.LogWarn(_clock, _id, $"Connected Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
                 return;

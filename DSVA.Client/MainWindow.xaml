@@ -19,6 +19,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Grid>
             <Grid.ColumnDefinitions>
@@ -30,7 +31,25 @@
             <TextBox Grid.Column="1" Text="{Binding Service, Mode=TwoWay}"/>
             <Button Content="Connect" Grid.Column="2" Command="{Binding ConnectCommand}"/>
         </Grid>
-        <ListView Grid.Row="1" ItemsSource="{Binding Message, Mode=TwoWay}"/>
+        <ListView Grid.Row="1" ItemsSource="{Binding Messages, Mode=TwoWay}">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <WrapPanel>
+                        <TextBlock Text="[" />
+                        <TextBlock Text="{Binding Clock}" />
+                        <TextBlock Text="]" />
+                        <TextBlock Text=" From: " />
+                        <TextBlock Text="{Binding From}" FontWeight="Bold" />
+                        <TextBlock Text=", " />
+                        <TextBlock Text="To: " />
+                        <TextBlock Text="{Binding To}" FontWeight="Bold" />
+                        <TextBlock Text=" (" />
+                        <TextBlock Text="{Binding Content}" TextDecorations="Underline" Foreground="Blue"/>
+                        <TextBlock Text=")" />
+                    </WrapPanel>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
         <StackPanel Orientation="Vertical" Grid.Row="2">
             <TextBlock Text="To"/>
             <TextBox Text="{Binding To, Mode=TwoWay}" Height="18" Width="800"/>
@@ -42,5 +61,6 @@
         <Button Content="Send" Grid.Row="4" Command="{Binding SendMessageCommand}"/>
         <Button Content="HeartBeat" Grid.Row="5" Command="{Binding HeartBeatCommnad}"/>
         <Button Content="Sign out" Grid.Row="6" Command="{Binding SignOutCommnad}"/>
+        <Button Content="Get Journal" Grid.Row="7" Command="{Binding GetJournal}"/>
     </Grid>
 </Window>

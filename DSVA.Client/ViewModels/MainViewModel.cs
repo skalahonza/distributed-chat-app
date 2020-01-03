@@ -1,6 +1,8 @@
 ﻿using DSVA.Client.Models;
+using DSVA.Lib.Extensions;
 using DSVA.Service;
 using fm.Mvvm;
+using Grpc.Core;
 using Grpc.Net.Client;
 using PropertyChanged;
 using System.Collections.ObjectModel;
@@ -13,10 +15,10 @@ namespace DSVA.Client.ViewModels
     [AddINotifyPropertyChangedInterface]
     public class MainViewModel : INotifyPropertyChanged
     {
-        private ChatClient _client;
+        private ChatClient _client => string.IsNullOrEmpty(Service) ? null : new ChatClient(GrpcChannel.ForAddress(Service));
         public ObservableCollection<Message> Messages { get; set; } = new ObservableCollection<Message>();
 
-        public string Service { get; set; }
+        public string Service { get; set; } = "https://localhost:5001";
         public string Message { get; set; }
         public string To { get; set; }
 
@@ -29,8 +31,7 @@ namespace DSVA.Client.ViewModels
                    Content = Message,
                    From = Service,
                    To = To
-               });
-               Messages.Add(new Message { Content = Message, IsFromMe = true });
+               });               
                Message = "";
            }
            catch (System.Exception ex)
@@ -39,12 +40,17 @@ namespace DSVA.Client.ViewModels
            }           
        });
 
+        /// <summary>
+        /// Request node connection
+        /// </summary>
         public RelayCommand ConnectCommand => new RelayCommand(_ =>
         {
-            var channel = GrpcChannel.ForAddress(Service);
-            _client = new ChatClient(channel);
+            
         });
 
+        /// <summary>
+        /// Gracefully signout
+        /// </summary>
         public RelayCommand SignOutCommnad => new RelayCommand(_ =>
         {
             
@@ -53,6 +59,15 @@ namespace DSVA.Client.ViewModels
         public RelayCommand HeartBeatCommnad => new RelayCommand(_ =>
         {
             _client?.HeartBeatRequest(new Empty());
+        });
+
+        public RelayCommand GetJournal => new RelayCommand(async _ =>
+        {
+            if (_client == null) return;
+            Messages.Clear();
+            var replies = _client.GetJournal(new Empty());
+            foreach (var reply in replies.Data)
+                Messages.Add(new Message(Service, reply.From, reply.To, reply.Content,string.Join(',',reply.Jclock.ToOrderedValues())));
         });
 
         public event PropertyChangedEventHandler PropertyChanged;
