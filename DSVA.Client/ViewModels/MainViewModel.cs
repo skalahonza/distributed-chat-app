@@ -2,20 +2,19 @@
 using DSVA.Lib.Extensions;
 using DSVA.Service;
 using fm.Mvvm;
-using Grpc.Core;
-using Grpc.Net.Client;
 using PropertyChanged;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using static DSVA.Service.Chat;
+using static DSVA.Lib.Utils.GrpcUtils;
 
 namespace DSVA.Client.ViewModels
 {
     [AddINotifyPropertyChangedInterface]
     public class MainViewModel : INotifyPropertyChanged
     {
-        private ChatClient _client => string.IsNullOrEmpty(Service) ? null : new ChatClient(GrpcChannel.ForAddress(Service));
+        private ChatClient _client => Create(Service);
         public ObservableCollection<Message> Messages { get; set; } = new ObservableCollection<Message>();
 
         public string Service { get; set; } = "https://localhost:5001";

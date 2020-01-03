@@ -9,8 +9,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using static DSVA.Service.Chat;
+using static DSVA.Lib.Utils.GrpcUtils;
 
 namespace DSVA.Lib.Models
 {
@@ -28,8 +28,8 @@ namespace DSVA.Lib.Models
             get { return nextAddr; }
             set
             {
-                nextAddr = value;
-                (_next, nextAddr) = string.IsNullOrEmpty(value) || value == _options.Address ? (null, "") : (new ChatClient(GrpcChannel.ForAddress(value)), value);
+                nextAddr = value == _options.Address ? "" : value;
+                _next = Create(value);                
             }
         }
 
@@ -38,8 +38,8 @@ namespace DSVA.Lib.Models
             get { return nextNextAddr; }
             set
             {
-                nextNextAddr = value;
-                (_nextNext, nextNextAddr) = string.IsNullOrEmpty(value) || value == _options.Address ? (null, "") : (new ChatClient(GrpcChannel.ForAddress(value)), value);
+                nextNextAddr = value == _options.Address ? "" : value;
+                _nextNext = Create(value);                
             }
         }
 
@@ -276,6 +276,7 @@ namespace DSVA.Lib.Models
 
         public void HeartBeat()
         {
+            _log.LogMessage(_clock, _id, "Sending heartbet.");
             PassMessage(node => node.HeartBeat(new Beat
             {
                 Header = CreateHeader(),
