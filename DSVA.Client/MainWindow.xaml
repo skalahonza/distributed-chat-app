@@ -30,8 +30,7 @@
             <TextBox Grid.Column="1" Text="{Binding Service, Mode=TwoWay}"/>
             <Button Content="Connect" Grid.Column="2" Command="{Binding ConnectCommand}"/>
         </Grid>
-        <ListView Grid.Row="1">
-        </ListView>
+        <ListView Grid.Row="1" ItemsSource="{Binding Message, Mode=TwoWay}"/>
         <StackPanel Orientation="Vertical" Grid.Row="2">
             <TextBlock Text="To"/>
             <TextBox Text="{Binding To, Mode=TwoWay}" Height="18" Width="800"/>

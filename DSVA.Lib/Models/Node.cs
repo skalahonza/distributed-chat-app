@@ -1,4 +1,5 @@
-﻿using DSVA.Lib.Extensions;
+﻿using DSVA.Lib.Comparers;
+using DSVA.Lib.Extensions;
 using DSVA.Service;
 using Grpc.Core;
 using Grpc.Net.Client;
@@ -66,6 +67,10 @@ namespace DSVA.Lib.Models
             _clock = new ConcurrentDictionary<int, long>(Enumerable.Range(0, _id + 1).ToDictionary(x => x, _ => (long)0));
             (NextAddr, NextNextAddr) = (options.Next, "");
         }
+
+        private IEnumerable<JournalEntry> ConfirmedOrderedJournal() => _journal
+                .Where(x => x.IsConfirmed)
+                .OrderBy(x => x.Clock, new VectorClockComparer());
 
         private bool IsLeader() => leaderId == _options.Address;
 

@@ -52,7 +52,7 @@ namespace DSVA.Client.ViewModels
 
         public RelayCommand HeartBeatCommnad => new RelayCommand(_ =>
         {
-            _client?.HeartBeatRequest(new Empty { });
+            _client?.HeartBeatRequest(new Empty());
         });
 
         public event PropertyChangedEventHandler PropertyChanged;
