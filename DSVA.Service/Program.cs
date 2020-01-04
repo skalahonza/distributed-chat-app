@@ -17,10 +17,10 @@ namespace DSVA.Service
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.UseStartup<Startup>()
+                .UseUrls("https://*:5001")
                 .UseSerilog((hostingContext, loggerConfiguration) => loggerConfiguration
                     .ReadFrom.Configuration(hostingContext.Configuration)
-                    .Enrich.FromLogContext()
-                    
+                    .Enrich.FromLogContext()                   
                     .WriteTo.Console()
                     .WriteTo.RollingFile(Path.Combine(hostingContext.Configuration
                         .GetSection("Logging")
