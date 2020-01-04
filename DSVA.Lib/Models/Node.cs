@@ -556,12 +556,14 @@ namespace DSVA.Lib.Models
             // Second node added to the circle
             if (_next == null)
             {
+                _log.LogMessage(_clock, _id, "Second node added to the circle.");
                 NextAddr = node.Addr;
-            }
+            }            
 
             // me new x
             else if (node.NextAddr == NextAddr)
             {
+                _log.LogMessage(_clock, _id, "me new x");
                 // treat next as nextnext
                 NextNextAddr = NextAddr;
                 // newcomer is my new next
@@ -570,15 +572,19 @@ namespace DSVA.Lib.Models
             // me x new
             else if (node.NextAddr == NextNextAddr && node.Addr != NextAddr)
             {
+                _log.LogMessage(_clock, _id, "me x new");
                 NextNextAddr = node.Addr;
             }
             // new me x
             else if (node.NextAddr == _options.Address)
             {
+                _log.LogMessage(_clock, _id, "new me x");
                 // Third node added to the circle
                 if (_nextNext == null)
+                {
+                    _log.LogMessage(_clock, _id, "Third node added to the circle.");
                     NextNextAddr = node.Addr;
-                //TODE  Resumption - node dropped, noone detected and recovered                
+                }             
                 node.NextNextAddr = NextAddr;
             }
 
