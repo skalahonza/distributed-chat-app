@@ -20,6 +20,7 @@ namespace DSVA.Client.ViewModels
         public string Service { get; set; } = "https://localhost:5001";
         public string Message { get; set; }
         public string To { get; set; }
+        public string Next { get; set; }
 
         public RelayCommand SendMessageCommand => new RelayCommand(_ =>
        {
@@ -30,13 +31,13 @@ namespace DSVA.Client.ViewModels
                    Content = Message,
                    From = Service,
                    To = To
-               });               
+               });
                Message = "";
            }
            catch (System.Exception ex)
            {
                MessageBox.Show(ex.Message);
-           }           
+           }
        });
 
         /// <summary>
@@ -44,7 +45,7 @@ namespace DSVA.Client.ViewModels
         /// </summary>
         public RelayCommand ConnectCommand => new RelayCommand(_ =>
         {
-            
+            _client?.SignInClient(new Connect { NextAddr = Next });
         });
 
         /// <summary>
@@ -52,7 +53,7 @@ namespace DSVA.Client.ViewModels
         /// </summary>
         public RelayCommand SignOutCommnad => new RelayCommand(_ =>
         {
-            
+            _client?.SignOutClient(new Empty());
         });
 
         public RelayCommand HeartBeatCommnad => new RelayCommand(_ =>
@@ -66,7 +67,7 @@ namespace DSVA.Client.ViewModels
             Messages.Clear();
             var replies = _client.GetJournal(new Empty());
             foreach (var reply in replies.Data)
-                Messages.Add(new Message(Service, reply.From, reply.To, reply.Content,string.Join(',',reply.Jclock.ToOrderedValues())));
+                Messages.Add(new Message(Service, reply.From, reply.To, reply.Content, string.Join(',', reply.Jclock.ToOrderedValues())));
         });
 
         public event PropertyChangedEventHandler PropertyChanged;

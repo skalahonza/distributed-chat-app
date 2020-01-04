@@ -74,21 +74,42 @@ namespace DSVA.Lib.Models
 
         private bool IsLeader() => leaderId == _options.Address;
 
-        public void SendConnected(string next = null)
+        public void SendConnected() => SendConnected(_options.Next);
+
+        public void SendConnected(string next)
         {
-            if (_next != null)
+            _journal.Clear();
+            if (string.IsNullOrEmpty(next))
+            {
+                _log.LogError(_clock, _id, "Cannot connect, next is not defined.");
+            }
+            else
             {
                 _log.LogWarn(_clock, _id, "Sending connected message.");
+                NextAddr = next;
                 PassMessage((x) => x.Connected(new Connect
                 {
                     Node = _id,
                     Addr = _options.Address,
                     Header = CreateHeader(),
-                    NextAddr = _options.Next ?? next ?? "",
+                    NextAddr = next,
                     NextNextAddr = "",
                 }));
             }
             InitElection();
+        }
+
+        public void Disconnect()
+        {
+            _log.LogError(_clock, _id, "Gracefully disconnecting.");
+            PassMessage(node => node.SignOut(new Disconnect
+            {
+                Header = CreateHeader(),
+                Addr = _options.Address,
+                NextAddr = NextAddr,
+                NextNextAddr = NextNextAddr
+            }));
+            NextAddr = NextNextAddr = "";
         }
 
         private void UpdateClock(IDictionary<int, long> clock)
@@ -163,7 +184,6 @@ namespace DSVA.Lib.Models
 
         // HANDLE DEAED NODES
         // TODO Update clock every time you send message 
-        // TOOD HADNEL UNDELIVERABLE CHAT MASSAGES
         private void PassMessage(Action<ChatClient> pass, bool passThrough = false) =>
             PassMessage(pass, HandleDeadNodes, passThrough);
 
@@ -337,7 +357,10 @@ namespace DSVA.Lib.Models
                 PassMessage(node => node.MessageReceived(new ReceivedMessage
                 {
                     Header = CreateHeader(),
-                    Jid = message.Header.Id
+                    Jid = message.Header.Id,
+                    From = message.From,
+                    To = message.To,
+                    Content = message.Content,
                 }));
             }
             // other nodes - forward
@@ -353,8 +376,18 @@ namespace DSVA.Lib.Models
             if (IsLeader())
             {
                 var entry = _journal.FirstOrDefault(x => x.Id == message.Jid);
-                if (entry == null)
+                if (entry == null) // TODO send message not delivered
+                {
                     _log.LogError(_clock, _id, $"Journal with id {message.Jid} not found.");
+                    PassMessage(y => y.MessageLost(new ChatMessageLost
+                    {
+                        Header = CreateHeader(),
+                        From = message.From,
+                        To = message.To,
+                        Content = message.Content,
+                        Jid = message.Jid
+                    }));
+                }
                 else
                 {
                     _log.LogWarn(_clock, _id, $"Journal with id {message.Jid} confirmed.");
@@ -385,10 +418,41 @@ namespace DSVA.Lib.Models
             PassMessage(node => node.ConfirmJournal(message));
         }
 
-        // TODO what if leader disconnected
+        private void CheckUndeliveredMessages(string node)
+        {
+            // TODO HADNEL UNDELIVERABLE CHAT MASSAGES
+            foreach (var x in _journal.Where(x => !x.IsConfirmed && x.To == node))
+            {
+                _log.LogError(_clock, _id, $"Message from {x.From} to {x.To} with id {x.Id} cannot be delivered.");
+                PassMessage(y => y.MessageLost(new ChatMessageLost
+                {
+                    Header = CreateHeader(),
+                    From = x.From,
+                    To = x.To,
+                    Content = x.Content,
+                    Jid = x.Id
+                }));
+            }
+        }
+
+        public void Act(ChatMessageLost message)
+        {
+            //HADNLE UNDELIVERABLE CHAT MASSAGES
+            if (message.From == _options.Address)
+            {
+                _log.LogError(_clock, _id, $"My Message to {message.To} with id {message.Jid} cannot be delivered.");
+            }
+            if (ProcessHeader(message.Header, message)) return;
+            else
+            {
+                PassMessage(x => x.MessageLost(message));
+            }
+        }
+
         public void Act(Disconnect message)
         {
             if (ProcessHeader(message.Header, message)) return;
+            if (IsLeader()) CheckUndeliveredMessages(message.Addr);
             // My next node disconnected
             // Me --> dead -->
             if (message.Addr == NextAddr)
@@ -398,6 +462,12 @@ namespace DSVA.Lib.Models
 
                 NextNextAddr = message.NextNextAddr != _options.Address ? message.NextNextAddr : "";
                 _log.LogWarn(_clock, _id, $"Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
+
+                //what if leader disconnected
+                if (message.Addr == leaderId)
+                {
+                    InitElection();
+                }
             }
             // My next node disconnected
             // Me --> node --> dead
@@ -419,6 +489,7 @@ namespace DSVA.Lib.Models
         public void Act(Dropped message)
         {
             if (ProcessHeader(message.Header, message)) return;
+            if (IsLeader()) CheckUndeliveredMessages(message.Addr);
             // My next node disconnected
             // Me --> dead -->
             if (message.Addr == NextAddr)
@@ -477,11 +548,23 @@ namespace DSVA.Lib.Models
                 return;
             }
 
+            if (IsLeader())
+            {
+                //sync messages - fill copy of journal 
+                var copy = ConfirmedOrderedJournal()
+                    .Select(x => new JournalEntryData { Jid = x.Id, Jclock = { x.Clock }, From = x.From, To = x.To, Content = x.Content });
+                foreach (var item in copy)
+                    node.Journal.Add(item);
+            }
+
             // I am the new node and other nodes already filled my nextnext
             if (node.Addr == _options.Address)
             {
-                // TODO sync messages - get copy of journal                
+                //sync messages - get copy of journal                                
+                foreach (var item in node.Journal.Select(x => new JournalEntry(x.Jid, x.Jclock, x.From, x.To, x.Content) { IsConfirmed = true }))
+                    _journal.Add(item);
                 NextNextAddr = node.NextNextAddr;
+
                 _log.LogWarn(_clock, _id, $"Connected Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
                 return;
             }

@@ -124,5 +124,23 @@ namespace DSVA.Service
             };
             return Task.FromResult(response);
         }
+
+        public override Task<Status> SignInClient(Connect request, ServerCallContext context)
+        {
+            _node.SendConnected(request.NextAddr);
+            return Task.FromResult(new Status
+            {
+                Ok = true
+            });
+        }
+
+        public override Task<Status> SignOutClient(Empty request, ServerCallContext context)
+        {
+            _node.Disconnect();
+            return Task.FromResult(new Status
+            {
+                Ok = true
+            });
+        }
     }
 }

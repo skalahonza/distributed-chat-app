@@ -9,12 +9,15 @@ service Chat{
     rpc SendMessage (ChatMessage) returns (Status);    
     rpc MessageReceived (ReceivedMessage) returns (Status);
     rpc ConfirmJournal (JournalMessageConfirm) returns (Status);
+    rpc MessageLost (ChatMessageLost) returns (Status);
     rpc GetJournal (Empty) returns (JournalEntryResponse);
     rpc HeartBeat (Beat) returns (Status);
     rpc HeartBeatRequest (Empty) returns (Status);
     rpc StartElection (Election) returns (Status);
     rpc WonElection (Elected) returns (Status);
     rpc Connected (Connect) returns (Status);
+    rpc SignOutClient (Empty) returns (Status);
+    rpc SignInClient (Connect) returns (Status);
     rpc SignOut (Disconnect) returns (Status);
     rpc Drop (Dropped) returns (Status);
 }
@@ -63,6 +66,9 @@ message ChatMessage{
 // Journal message and wait for confirmation
 message ReceivedMessage{
     Header header = 1;
+    string from = 2;
+    string to = 3;
+    string content = 4;
     string jid = 5;
 }
 
@@ -95,6 +101,14 @@ message ChatMessageClient{
     string content = 4;
 }
 
+message ChatMessageLost{
+    Header header = 1;  
+    string from = 2;
+    string to = 3;
+    string content = 4;
+    string jid = 5;
+}
+
 // node gracefuly disconnected
 message Disconnect {
     Header header = 1;    
@@ -110,6 +124,7 @@ message Connect {
     string addr = 3;
     string _nextAddr = 4;
     string _nextNextAddr = 6;
+    repeated JournalEntryData journal = 7;
 }
 
 // droped node detected
