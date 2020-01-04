@@ -325,6 +325,11 @@ namespace DSVA.Lib.Models
 
         public void Act(ChatMessage message, bool validate = true)
         {
+            //HADNLE UNDELIVERABLE CHAT MASSAGES
+            if (validate && message.From == _options.Address)
+            {
+                _log.LogError(_clock, _id, $"My Message to {message.To} with id {message.Header.Id} cannot be delivered.");
+            }
             if (validate && ProcessHeader(message.Header, message)) return;
             if (IsLeader() && message.To == _options.Address)
             {
@@ -436,13 +441,13 @@ namespace DSVA.Lib.Models
         }
 
         public void Act(ChatMessageLost message)
-        {
+        {           
+            if (ProcessHeader(message.Header, message)) return;
             //HADNLE UNDELIVERABLE CHAT MASSAGES
             if (message.From == _options.Address)
             {
                 _log.LogError(_clock, _id, $"My Message to {message.To} with id {message.Jid} cannot be delivered.");
             }
-            if (ProcessHeader(message.Header, message)) return;
             else
             {
                 PassMessage(x => x.MessageLost(message));

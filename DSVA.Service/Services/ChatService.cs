@@ -142,5 +142,14 @@ namespace DSVA.Service
                 Ok = true
             });
         }
+
+        public override Task<Status> MessageLost(ChatMessageLost request, ServerCallContext context)
+        {
+            _node.Disconnect();
+            return Task.FromResult(new Status
+            {
+                Ok = true
+            });
+        }
     }
 }
