@@ -503,19 +503,32 @@ namespace DSVA.Lib.Models
             if (node.Addr == NextAddr)
             {
                 _log.LogError(_clock, _id, $"Node: {node.Addr} wrongly connected.");
-
-                // mark as dropped
-                HandleDeadNodes();
-
-                // reconnect him correctely
-                var x = _nextNext ?? _next;
-                _log.LogMessage(_clock, _id, $"Reconnecting node {node.Addr}");
-                x?.Connected(new Connect
+                if(_nextNext != null)
                 {
-                    Header = CreateHeader(),
-                    Addr = node.Addr,
-                    NextAddr = node.NextAddr
-                });
+                    // mark as dropped
+                    _log.LogMessage(_clock, _id, $"Marking node {node.Addr} as dropped");
+                    _nextNext?.Drop(new Dropped
+                    {
+                        Header = CreateHeader(),
+                        NextAddr = NextNextAddr,
+                        NextNextAddr = "",
+                        Addr = node.Addr
+                    });
+
+                    // reconnect him correctely
+                    var x = _nextNext ?? _next;
+                    _log.LogMessage(_clock, _id, $"Reconnecting node {node.Addr}");
+                    Act(new Connect
+                    {
+                        Header = CreateHeader(),
+                        Addr = node.Addr,
+                        NextAddr = node.NextAddr
+                    });
+                }
+                else
+                {
+                    _log.LogMessage(_clock, _id, "Two nodes only.");
+                }
                 return;
             }
 
