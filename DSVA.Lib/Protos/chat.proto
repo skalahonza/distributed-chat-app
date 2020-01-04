@@ -9,7 +9,6 @@ service Chat{
     rpc SendMessage (ChatMessage) returns (Status);    
     rpc MessageReceived (ReceivedMessage) returns (Status);
     rpc ConfirmJournal (JournalMessageConfirm) returns (Status);
-    rpc MessageLost (ChatMessageLost) returns (Status);
     rpc GetJournal (Empty) returns (JournalEntryResponse);
     rpc HeartBeat (Beat) returns (Status);
     rpc HeartBeatRequest (Empty) returns (Status);
@@ -88,6 +87,7 @@ message JournalEntryData{
     string content = 4;
     string jid = 5;
     map<int32, int64> jclock = 6;
+    bool confirmed = 7;
 }
 
 message JournalEntryResponse{
@@ -99,14 +99,6 @@ message ChatMessageClient{
     string from = 2;
     string to = 3;
     string content = 4;
-}
-
-message ChatMessageLost{
-    Header header = 1;  
-    string from = 2;
-    string to = 3;
-    string content = 4;
-    string jid = 5;
 }
 
 // node gracefuly disconnected

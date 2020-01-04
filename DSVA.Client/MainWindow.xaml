@@ -38,7 +38,7 @@
         <ListView Grid.Row="1" ItemsSource="{Binding Messages, Mode=TwoWay}">
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <WrapPanel>
+                    <WrapPanel IsEnabled="{Binding IsConfirmed}">
                         <TextBlock Text="[" />
                         <TextBlock Text="{Binding Clock}" />
                         <TextBlock Text="]" />

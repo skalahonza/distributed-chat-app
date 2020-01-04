@@ -67,7 +67,7 @@ namespace DSVA.Client.ViewModels
             Messages.Clear();
             var replies = _client.GetJournal(new Empty());
             foreach (var reply in replies.Data)
-                Messages.Add(new Message(Service, reply.From, reply.To, reply.Content, string.Join(',', reply.Jclock.ToOrderedValues())));
+                Messages.Add(new Message(Service, reply.From, reply.To, reply.Content, string.Join(',', reply.Jclock.ToOrderedValues()), reply.Confirmed));
         });
 
         public event PropertyChangedEventHandler PropertyChanged;

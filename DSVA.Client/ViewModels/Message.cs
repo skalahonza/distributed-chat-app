@@ -9,14 +9,16 @@
         public string Clock { get; }
         public bool IsForMe => To == _me;
         public bool IsFromMe => From == _me;
+        public bool IsConfirmed { get; }
 
-        public Message(string me, string from, string to, string content, string clock)
+        public Message(string me, string from, string to, string content, string clock, bool isConfirmed)
         {
             _me = me;
             From = from;
             To = to;
             Content = content;
             Clock = clock;
+            IsConfirmed = isConfirmed;
         }
     }
 }

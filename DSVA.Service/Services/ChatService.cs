@@ -119,7 +119,8 @@ namespace DSVA.Service
                     From = x.From,
                     To = x.To,
                     Jid = x.Id,
-                    Jclock = { x.Clock }
+                    Jclock = { x.Clock },
+                    Confirmed = x.IsConfirmed
                 })}
             };
             return Task.FromResult(response);
@@ -135,15 +136,6 @@ namespace DSVA.Service
         }
 
         public override Task<Status> SignOutClient(Empty request, ServerCallContext context)
-        {
-            _node.Disconnect();
-            return Task.FromResult(new Status
-            {
-                Ok = true
-            });
-        }
-
-        public override Task<Status> MessageLost(ChatMessageLost request, ServerCallContext context)
         {
             _node.Disconnect();
             return Task.FromResult(new Status

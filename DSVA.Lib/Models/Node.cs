@@ -68,9 +68,13 @@ namespace DSVA.Lib.Models
             (NextAddr, NextNextAddr) = (options.Next, "");
         }
 
-        public IEnumerable<JournalEntry> ConfirmedOrderedJournal() => _journal
-                .Where(x => x.IsConfirmed)
+        public IEnumerable<JournalEntry> OrderedJournal() =>
+            _journal
                 .OrderBy(x => x.Clock, new VectorClockComparer());
+
+        public IEnumerable<JournalEntry> ConfirmedOrderedJournal() =>
+            OrderedJournal()
+                .Where(x => x.IsConfirmed);
 
         private bool IsLeader() => leaderId == _options.Address;
 
@@ -381,17 +385,9 @@ namespace DSVA.Lib.Models
             if (IsLeader())
             {
                 var entry = _journal.FirstOrDefault(x => x.Id == message.Jid);
-                if (entry == null) // TODO send message not delivered
+                if (entry == null)
                 {
                     _log.LogError(_clock, _id, $"Journal with id {message.Jid} not found.");
-                    PassMessage(y => y.MessageLost(new ChatMessageLost
-                    {
-                        Header = CreateHeader(),
-                        From = message.From,
-                        To = message.To,
-                        Content = message.Content,
-                        Jid = message.Jid
-                    }));
                 }
                 else
                 {
@@ -423,41 +419,9 @@ namespace DSVA.Lib.Models
             PassMessage(node => node.ConfirmJournal(message));
         }
 
-        private void CheckUndeliveredMessages(string node)
-        {
-            // TODO HADNEL UNDELIVERABLE CHAT MASSAGES
-            foreach (var x in _journal.Where(x => !x.IsConfirmed && x.To == node))
-            {
-                _log.LogError(_clock, _id, $"Message from {x.From} to {x.To} with id {x.Id} cannot be delivered.");
-                PassMessage(y => y.MessageLost(new ChatMessageLost
-                {
-                    Header = CreateHeader(),
-                    From = x.From,
-                    To = x.To,
-                    Content = x.Content,
-                    Jid = x.Id
-                }));
-            }
-        }
-
-        public void Act(ChatMessageLost message)
-        {           
-            if (ProcessHeader(message.Header, message)) return;
-            //HADNLE UNDELIVERABLE CHAT MASSAGES
-            if (message.From == _options.Address)
-            {
-                _log.LogError(_clock, _id, $"My Message to {message.To} with id {message.Jid} cannot be delivered.");
-            }
-            else
-            {
-                PassMessage(x => x.MessageLost(message));
-            }
-        }
-
         public void Act(Disconnect message)
         {
             if (ProcessHeader(message.Header, message)) return;
-            if (IsLeader()) CheckUndeliveredMessages(message.Addr);
             // My next node disconnected
             // Me --> dead -->
             if (message.Addr == NextAddr)
@@ -494,7 +458,6 @@ namespace DSVA.Lib.Models
         public void Act(Dropped message)
         {
             if (ProcessHeader(message.Header, message)) return;
-            if (IsLeader()) CheckUndeliveredMessages(message.Addr);
             // My next node disconnected
             // Me --> dead -->
             if (message.Addr == NextAddr)
