@@ -508,7 +508,9 @@ namespace DSVA.Lib.Models
                 HandleDeadNodes();
 
                 // reconnect him correctely
-                _nextNext?.Connected(new Connect
+                var x = _nextNext ?? _next;
+                _log.LogMessage(_clock, _id, $"Reconnecting node {node.Addr}");
+                x?.Connected(new Connect
                 {
                     Header = CreateHeader(),
                     Addr = node.Addr,
