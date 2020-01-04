@@ -570,7 +570,7 @@ namespace DSVA.Lib.Models
             {
                 _log.LogMessage(_clock, _id, "new me x");
                 // Third node added to the circle
-                if (_nextNext == null)
+                if (string.IsNullOrEmpty(NextNextAddr))
                 {
                     _log.LogMessage(_clock, _id, "Third node added to the circle.");
                     NextNextAddr = node.Addr;
