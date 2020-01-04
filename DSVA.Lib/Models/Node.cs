@@ -187,7 +187,7 @@ namespace DSVA.Lib.Models
         }
 
         // HANDLE DEAED NODES
-        // TODO Update clock every time you send message 
+        // Update clock every time you send message 
         private void PassMessage(Action<ChatClient> pass, bool passThrough = false) =>
             PassMessage(pass, HandleDeadNodes, passThrough);
 
@@ -313,6 +313,7 @@ namespace DSVA.Lib.Models
         public void Act(Beat message)
         {
             if (ProcessHeader(message.Header, message)) return;
+            message.Header = CreateHeader(message.Header.Id);
             PassMessage(node => node.HeartBeat(message));
         }
 
@@ -357,11 +358,13 @@ namespace DSVA.Lib.Models
                 var clock = new Dictionary<int, long>(_clock);
                 var entry = new JournalEntry(message.Header.Id, _clock, message.From, message.To, message.Content);
                 _journal.Add(entry);
+                message.Header = CreateHeader(message.Header.Id);
                 PassMessage(node => node.SendMessage(message));
             }
             // recipient 
             else if (message.To == _options.Address)
             {
+                message.Header = CreateHeader(message.Header.Id);
                 PassMessage(node => node.SendMessage(message));
                 PassMessage(node => node.MessageReceived(new ReceivedMessage
                 {
@@ -375,6 +378,7 @@ namespace DSVA.Lib.Models
             // other nodes - forward
             else
             {
+                message.Header = CreateHeader(message.Header.Id);
                 PassMessage(node => node.SendMessage(message));
             }
         }
