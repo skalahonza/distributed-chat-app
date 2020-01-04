@@ -504,25 +504,14 @@ namespace DSVA.Lib.Models
             {
                 _log.LogError(_clock, _id, $"Node: {node.Addr} wrongly connected.");
                 if(_nextNext != null)
-                {
-                    // mark as dropped
-                    _log.LogMessage(_clock, _id, $"Marking node {node.Addr} as dropped");
-                    _nextNext?.Drop(new Dropped
-                    {
-                        Header = CreateHeader(),
-                        NextAddr = NextNextAddr,
-                        NextNextAddr = "",
-                        Addr = node.Addr
-                    });
-
-                    // reconnect him correctely
-                    var x = _nextNext ?? _next;
+                {                    
+                    // reconnect him correctly                    
                     _log.LogMessage(_clock, _id, $"Reconnecting node {node.Addr}");
-                    x.Connected(new Connect
+                    _nextNext.Connected(new Connect
                     {
                         Header = CreateHeader(),
                         Addr = node.Addr,
-                        NextAddr = node.NextAddr
+                        NextAddr = NextNextAddr
                     });
                 }
                 else
@@ -547,6 +536,7 @@ namespace DSVA.Lib.Models
                 //sync messages - get copy of journal                                
                 foreach (var item in node.Journal.Select(x => new JournalEntry(x.Jid, x.Jclock, x.From, x.To, x.Content) { IsConfirmed = true }))
                     _journal.Add(item);
+                NextAddr = node.NextAddr;
                 NextNextAddr = node.NextNextAddr;
 
                 _log.LogWarn(_clock, _id, $"Connected Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
