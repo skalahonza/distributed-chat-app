@@ -500,7 +500,7 @@ namespace DSVA.Lib.Models
             if (ProcessHeader(node.Header, node)) return;
 
             // Reusmption by accident - connect before dropped/disconnected
-            if (node.Addr == NextAddr)
+            if (node.Addr == NextAddr && node.NextAddr != NextNextAddr)
             {
                 _log.LogError(_clock, _id, $"Node: {node.Addr} wrongly connected.");
                 if(_nextNext != null)
