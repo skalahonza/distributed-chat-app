@@ -130,7 +130,7 @@ namespace DSVA.Lib.Models
         private Header CreateHeader(string id)
         {
             _clock[_id]++;
-            _messages.Add(id);
+            //TODO _messages.Add(id);
             return new Header()
             {
                 Id = id,
@@ -438,19 +438,19 @@ namespace DSVA.Lib.Models
                     InitElection();
                 }
             }
-            // My next node disconnected
+            // My next next node disconnected
             // Me --> node --> dead
             else if (message.Addr == NextNextAddr)
             {
                 _log.LogWarn(_clock, _id, "My Next Next node disconnected.");
                 NextNextAddr = message.NextAddr;
-                message.Header = CreateHeader();
+                message.Header = CreateHeader(message.Header.Id);
                 PassMessage(node => node.SignOut(message));
                 _log.LogWarn(_clock, _id, $"Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
             }
             else
             {
-                message.Header = CreateHeader();
+                message.Header = CreateHeader(message.Header.Id);
                 PassMessage(node => node.SignOut(message));
             }
         }
@@ -474,7 +474,7 @@ namespace DSVA.Lib.Models
             {
                 _log.LogWarn(_clock, _id, "My Next Next node dropped.");
                 NextNextAddr = message.NextAddr;
-                message.Header = CreateHeader();
+                message.Header = CreateHeader(message.Header.Id);
                 PassMessage(node => node.Drop(message));
                 _log.LogWarn(_clock, _id, $"Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
             }
@@ -483,13 +483,13 @@ namespace DSVA.Lib.Models
             {
                 _log.LogWarn(_clock, _id, "My previous node disconnected.");
                 message.NextNextAddr = NextAddr;
-                message.Header = CreateHeader();
+                message.Header = CreateHeader(message.Header.Id);
                 PassMessage(node => node.Drop(message));
                 _log.LogWarn(_clock, _id, $"Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
             }
             else
             {
-                message.Header = CreateHeader();
+                message.Header = CreateHeader(message.Header.Id);
                 PassMessage(node => node.Drop(message));
             }
         }
@@ -566,7 +566,7 @@ namespace DSVA.Lib.Models
                 node.NextNextAddr = NextAddr;
             }
 
-            node.Header = CreateHeader();
+            node.Header = CreateHeader(node.Header.Id);
             PassMessage(x => x.Connected(node));
             _log.LogWarn(_clock, _id, $"Next: {NextAddr}, NextNext: {NextNextAddr}, Leader: {leaderId}");
         }

@@ -1,4 +1,17 @@
-﻿# Node 0 = default
+﻿# Vagrant
+theIPaddress=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
+echo $theIPaddress
+export ASPNETCORE_URLS="https://172.17.95.42:5001"
+
+
+172.17.95.46
+172.17.95.34
+172.17.95.40
+172.17.95.42
+172.17.95.41
+
+
+# Node 0 = default
 
 # Node 1
 $export ASPNETCORE_URLS="https://*:5002"
