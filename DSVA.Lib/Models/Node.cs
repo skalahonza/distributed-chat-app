@@ -518,7 +518,7 @@ namespace DSVA.Lib.Models
                     // reconnect him correctely
                     var x = _nextNext ?? _next;
                     _log.LogMessage(_clock, _id, $"Reconnecting node {node.Addr}");
-                    Act(new Connect
+                    x.Connected(new Connect
                     {
                         Header = CreateHeader(),
                         Addr = node.Addr,
