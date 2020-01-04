@@ -414,6 +414,7 @@ namespace DSVA.Lib.Models
         public void Act(JournalMessageConfirm message)
         {
             if (ProcessHeader(message.Header, message)) return;
+            if (IsLeader()) return;
             _journal.Add(new JournalEntry(message.Jid, message.Jclock, message.From, message.To, message.Content) { IsConfirmed = true });
             message.Header = CreateHeader(message.Header.Id);
             PassMessage(node => node.ConfirmJournal(message));
