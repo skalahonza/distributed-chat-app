@@ -7,7 +7,7 @@ echo Updating system
 sudo apt update -y && sudo apt upgrade -y
 echo Installing dotnet
 
-wget -q https://packages.microsoft.com/config/ubuntu/19.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+wget -q https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
 sudo dpkg -i packages-microsoft-prod.deb
 
 sudo apt-get update -y
@@ -20,7 +20,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "node1" do |node1|    
     node1.vm.box = "hashicorp/bionic64"
-    config.vm.network "private_network", ip: "192.168.50.1"
+    config.vm.network "private_network", ip: "192.168.50.11"
     node1.vm.provision "shell", inline: $script
   end
 
