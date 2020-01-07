@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 
@@ -11,12 +12,10 @@ namespace DSVA.Lib.Models
         private static string GetLocalIPAddress()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
-            foreach (var ip in host.AddressList)
-            {
-                if (ip.AddressFamily == AddressFamily.InterNetwork)
-                    return ip.ToString();
-            }
-            throw new Exception("No network adapters with an IPv4 address in the system!");
+            return host.AddressList
+                .FirstOrDefault(x => !x.ToString().Contains("127.0.0.1") && x.AddressFamily == AddressFamily.InterNetwork)
+                ?.ToString()
+                ?? throw new Exception("No network adapters with an IPv4 address in the system!");
         }
 
         public string Address
