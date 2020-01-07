@@ -13,7 +13,7 @@ namespace DSVA.Lib.Models
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
             return host.AddressList
-                .FirstOrDefault(x => !x.ToString().Contains("127.0.0.1") && x.AddressFamily == AddressFamily.InterNetwork)
+                .FirstOrDefault(x => !x.ToString().Contains("127.") && x.AddressFamily == AddressFamily.InterNetwork)
                 ?.ToString()
                 ?? throw new Exception("No network adapters with an IPv4 address in the system!");
         }
