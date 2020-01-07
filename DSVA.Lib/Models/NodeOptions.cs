@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Linq;
-using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
 namespace DSVA.Lib.Models
@@ -11,11 +11,21 @@ namespace DSVA.Lib.Models
         private Lazy<string> IpAddress = new Lazy<string>(() => $"https://{GetLocalIPAddress()}:5001");
         private static string GetLocalIPAddress()
         {
-            var host = Dns.GetHostEntry(Dns.GetHostName());
-            return host.AddressList
-                .FirstOrDefault(x => !x.ToString().Contains("127.") && x.AddressFamily == AddressFamily.InterNetwork)
-                ?.ToString()
-                ?? throw new Exception("No network adapters with an IPv4 address in the system!");
+            var firstUpInterface = NetworkInterface.GetAllNetworkInterfaces()
+                .OrderByDescending(c => c.Speed)
+                .FirstOrDefault(c => c.NetworkInterfaceType != NetworkInterfaceType.Loopback);
+
+            if (firstUpInterface != null)
+            {
+                var props = firstUpInterface.GetIPProperties();
+                // get first IPV4 address assigned to this interface
+                var firstIpV4Address = props.UnicastAddresses
+                    .Where(c => c.Address.AddressFamily == AddressFamily.InterNetwork)
+                    .Select(c => c.Address)
+                    .FirstOrDefault();
+                return firstIpV4Address.ToString();
+            }
+            throw new Exception("No network adapters with an IPv4 address in the system!");
         }
 
         public string Address
