@@ -1,9 +1,31 @@
-﻿namespace DSVA.Lib.Models
+﻿using System;
+using System.Net;
+using System.Net.Sockets;
+
+namespace DSVA.Lib.Models
 {
     public class NodeOptions
     {
-        public string Address { get; set; }
-        public string Next { get; set; }       
+        private string address;
+        private Lazy<string> IpAddress = new Lazy<string>(() => $"https://{GetLocalIPAddress()}:5001");
+        private static string GetLocalIPAddress()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (var ip in host.AddressList)
+            {
+                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                    return ip.ToString();
+            }
+            throw new Exception("No network adapters with an IPv4 address in the system!");
+        }
+
+        public string Address
+        {
+            get => string.IsNullOrEmpty(address) ? IpAddress.Value : address;
+            set => address = value;
+        }
+
+        public string Next { get; set; }
         public int Id { get; set; }
     }
 }
